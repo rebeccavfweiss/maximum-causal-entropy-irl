@@ -1,19 +1,14 @@
-"""
-Generates the numbers for Table 1 in the paper.
-"""
-
 import agent
 import demonstrator
 import env_objectworld
-import MDPSolver2
+import MDPSolver
 import numpy as np
-import argparse
 from tqdm import tqdm
 
-n_average = 10 # number of object-worlds to average over
+# number of object-worlds to average over
+n_average = 10 
 
 def create_env(rng=None):
-    ####### create environment
     env = None
 
     config_env = {"gridsizefull": 10,
@@ -39,44 +34,41 @@ def create_config_learner():
     return config_default_learner
 
 if __name__ == "__main__":
-    #parser = argparse.ArgumentParser(description='Train an agent with preferences.')
-    #parser.add_argument('Cr', type=float, help='soft reward constraints')
-    #args = parser.parse_args()
 
     results_expectation = []
-    results_variation = []
+    results_variance = []
+
     for seed in tqdm(range(n_average)):
         rng = np.random.RandomState(seed)
 
-        ####### create the environment
+        # create the environment
         env = create_env(rng)
 
-        ####### Learner config
+        # Learner config
         config_default_learner = create_config_learner()
 
-        ####### create teacher
-        tAg = demonstrator.Demonstrator(env, myname="demonstrator")
+        # create teacher
+        tAg = demonstrator.Demonstrator(env, demonstrator_name="demonstrator")
 
-        ####### create learner with preferences (with Agnostic teacher)
-        learner = agent.Agent(env, tAg.mu_demonstrator, config_default_learner, myname="agent", solver=MDPSolver2.MDPSolverExpectation())
+        # create agent that uses only expectation matching
+        learner = agent.Agent(env, tAg.mu_demonstrator, config_default_learner, agent_name="agent_expectation", solver=MDPSolver.MDPSolverExpectation())
         learner.batch_MCE(verbose=False)
-        learner.compute_and_draw(fignum=0, paper=False)
+        learner.compute_and_draw()
         reward = np.dot(env.reward, learner.solver.computeFeatureSVF_bellmann(env, learner.pi)[0])
         results_expectation.append(reward)
 
-        learner = agent.Agent(env, tAg.mu_demonstrator, config_default_learner, myname="agent", solver=MDPSolver2.MDPSolverVariance())
+        # create agent that also matches variances
+        learner = agent.Agent(env, tAg.mu_demonstrator, config_default_learner, agent_name="agent_variance", solver=MDPSolver.MDPSolverVariance())
         learner.batch_MCE(verbose=False)
-        learner.compute_and_draw(fignum=0, paper=False)
+        learner.compute_and_draw()
         reward = np.dot(env.reward, learner.solver.computeFeatureSVF_bellmann(env, learner.pi)[0])
-        results_variation.append(reward)
+        results_variance.append(reward)
 
-
-
-        tqdm.write("Result for seed %i: %f / %f" % (seed, results_expectation[-1], results_variation[-1]))
+        tqdm.write("Result for seed %i: %f / %f" % (seed, results_expectation[-1], results_variance[-1]))
 
     
     results_expectation = np.array(results_expectation)
-    results_variaation = np.array(results_variation)
+    results_variaation = np.array(results_variance)
 
     print("-- STATISTICS --")
     print("----Expectation -----")
@@ -84,9 +76,9 @@ if __name__ == "__main__":
     print("std-err:", np.std(results_expectation))
     print("")
 
-    print("----Variation -----")
-    print("means:", np.mean(results_variation))
-    print("std-err:", np.std(results_variation))
+    print("----variance -----")
+    print("means:", np.mean(results_variance))
+    print("std-err:", np.std(results_variance))
 
 
 
