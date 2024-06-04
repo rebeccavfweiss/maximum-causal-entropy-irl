@@ -1,5 +1,5 @@
 import MDPSolver
-from env_objectworld import Environment
+from env_special import Environment
 import copy
 import warnings
 
@@ -9,7 +9,7 @@ class Demonstrator:
 
     Parameters
     ----------
-    env : env_objectworld.Environment
+    env : env_special.Environment
         the environment representing the setting of the problem
     demonstrator_name : str
         name of the demonstrator
@@ -29,7 +29,7 @@ class Demonstrator:
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         reward : ndarray
             reward for each state

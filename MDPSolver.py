@@ -4,7 +4,7 @@ import copy
 import time
 from scipy import sparse
 import matplotlib.pyplot as plt
-from env_objectworld import Environment
+from env_special import Environment
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
@@ -22,7 +22,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         values: dict[str: any]
             dictionary storing the reward and variance terms for general use
@@ -104,7 +104,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ndarray ??
             policy to use
@@ -156,7 +156,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ndarray ??
             policy to use
@@ -192,7 +192,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ndarray ??
             policy to use
@@ -240,7 +240,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         deterministicPolicy
             policy to convert
@@ -263,7 +263,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy
             policy to use
@@ -287,7 +287,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ??
             policy to use
@@ -327,7 +327,7 @@ class MDPSolver(ABC):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ??
             policy to use
@@ -379,7 +379,7 @@ class MDPSolver(ABC):
         
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ??
             policy to use
@@ -422,7 +422,7 @@ class MDPSolverExpectation(MDPSolver):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         values : dict[str:any]
             dictionary with the feature expecation and variance term needed for bellmann
@@ -468,7 +468,7 @@ class MDPSolverExpectation(MDPSolver):
         
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ??
             policy to use (can be deterministic or stochastic)
@@ -518,7 +518,7 @@ class MDPSolverVariance(MDPSolver):
 
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         values : dict[str:any]
             dictionary with the feature expecation and variance term needed for bellmann
@@ -565,7 +565,7 @@ class MDPSolverVariance(MDPSolver):
         
         Parameters
         ----------
-        env : env_objectworld.Environment
+        env : env_special.Environment
             the environment representing the setting of the problem
         policy : ??
             policy to use (can be deterministic or stochastic)

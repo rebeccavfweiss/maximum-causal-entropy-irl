@@ -1,7 +1,7 @@
 import MDPSolver
 import numpy as np
 import copy
-from env_objectworld import Environment
+from env_special import Environment
 
 _largenum = 1000000
 
@@ -11,7 +11,7 @@ class Agent:
     
     Parameters
     ----------
-    env : env_objectworld.Environment
+    env : env_special.Environment
         the environment representing the setting of the problem
     mu_demonstrator : tuple[float, float]
         feature expectation and variance terms of the demonstrator
@@ -37,8 +37,6 @@ class Agent:
 
         self.theta_upperBound = _largenum
 
-        self.theta_gradientTerm = 1/np.inf
-
         self.V = None
         self.pi = None
         self.reward = None
@@ -46,9 +44,14 @@ class Agent:
 
         self.agent_name = agent_name
 
-    def compute_and_draw(self):
+    def compute_and_draw(self, show:bool=False):
         """ 
         computes soft_value iteration for given thetas and policy based on the result and draws policy
+
+        Parameters
+        ----------
+    	show : bool
+            whether or not the plot should be shown (default = false)
         """
         self.reward = self.get_reward_for_given_thetas()
         self.variance = self.get_variance_for_given_thetas()
@@ -56,7 +59,7 @@ class Agent:
         self.pi = pi_agent
         #self.V = V_agent
         self.V = self.solver.computeValueFunction_bellmann_averaged(self.env, self.pi, dict(reward=self.env.reward, variance=self.env.variance)) # this is value of agent's policy w.r.t. env's reward
-        self.env.draw(self.V, self.pi, self.reward, False, self.agent_name, 0)
+        self.env.draw(self.V, self.pi, self.reward, show, self.agent_name, 0)
 
     def get_reward_for_given_thetas(self):
         """
@@ -148,12 +151,12 @@ class Agent:
                 theta_v_neg_old = copy.deepcopy(theta_v_neg)
                 theta_v_old = copy.deepcopy(self.theta_v)
 
-            theta_e_pos = theta_e_pos_old - eta * (mu_reward_agent - self.mu_demonstrator[0] + theta_e_pos_old*(self.theta_gradientTerm/2))
-            theta_e_neg = theta_e_neg_old - eta * (self.mu_demonstrator[0] - mu_reward_agent + theta_e_neg_old*(self.theta_gradientTerm/2))
+            theta_e_pos = theta_e_pos_old - eta * (mu_reward_agent - self.mu_demonstrator[0])
+            theta_e_neg = theta_e_neg_old - eta * (self.mu_demonstrator[0] - mu_reward_agent)
 
             if calc_theta_v:
-                theta_v_pos = theta_v_pos_old - eta * (mu_variance_agent - self.mu_demonstrator[1] + theta_v_pos_old*(self.theta_gradientTerm/2))
-                theta_v_neg = theta_v_neg_old - eta * (self.mu_demonstrator[1] - mu_variance_agent + theta_v_neg_old*(self.theta_gradientTerm/2))
+                theta_v_pos = theta_v_pos_old - eta * (mu_variance_agent - self.mu_demonstrator[1])
+                theta_v_neg = theta_v_neg_old - eta * (self.mu_demonstrator[1] - mu_variance_agent)
 
         
             theta_e_pos = np.maximum(theta_e_pos, 0)

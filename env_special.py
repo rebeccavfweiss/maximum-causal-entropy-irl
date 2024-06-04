@@ -36,26 +36,21 @@ class Environment:
         self.actions = {"up": 0, "left": 1, "down": 2, "right": 3, "stay": 4}
         self.actions_names = ["up", "left", "down", "right", "stay"]
         self.n_actions = len(self.actions)
-        self.grid_size_full = env_args["gridsizefull"]
+        self.grid_size_full = 6
         self.gamma = env_args["gamma"]
         self.n_objects = 3
-        self.n_objects_each = 2
+        #self.n_objects_each = 2
 
         self.n_features_reward = len(env_args["theta_e"])
         self.theta_e = env_args["theta_e"]
         self.theta_v = env_args["theta_v"]
-        self.terminal_state = env_args["terminalState"]
-        self.randomMoveProb = env_args["randomMoveProb"]
-        self.terminal_gamma = env_args["terminal_gamma"]
-        self.n_features_full = 9
+        self.randomMoveProb = 0.0
+        self.n_features_full = 3 #potentially one for each object
 
-        if self.terminal_state == 1:
-            self.n_states = self.grid_size_full * self.grid_size_full + 1
-        else:
-            self.n_states = self.grid_size_full * self.grid_size_full
+        self.n_states = self.grid_size_full * self.grid_size_full
 
         self.InitD, self.init_state_neighbourhood = self.get_initial_distribution()
-        self.state_object_array, self.states_for_object = self.place_objects_on_the_grid()
+        self.state_object_array = self.place_objects_on_the_grid()
         self.feature_matrix_full = self.get_state_feature_matrix_full()
 
         self.feature_matrix = self.get_state_feature_matrix()
@@ -128,6 +123,7 @@ class Environment:
         # Explicitly put n_states = self.grid_size_full_x * self.grid_size_full_y
         states = self.grid_size_full * self.grid_size_full
         P = np.zeros((states, states, self.n_actions))
+        # last state is the goal state -> no possible actions from there
         for s in range(states):
             curr_state = s
             possible_actions = self.get_possible_actions_within_grid(s)
@@ -145,24 +141,10 @@ class Environment:
                     P[s, s, a] = 1 - randomMoveProb
 
         # stay action
-        for s in range(states):
-            P[s, s, self.n_actions - 1] = 1
+        #for s in range(states):
+        #    P[s, s, self.n_actions - 1] = 1
 
-        if self.terminal_state == 1:
-            # Now, if the MDP, has a terminal state, 4 things have to be taken care of
-            # Initialise a newP with different dimensions
-            P_changed = np.zeros((self.n_states, self.n_states, self.n_actions))
-            # Copy the old P as it is in this new P
-            P_changed[0:P.shape[0], 0:P.shape[1]] = P
-            # set the probability of going from any object_state with all actions to terminal state as 1-\gamma
-            P_changed[self.states_for_object, self.n_states - 1, :] = 1 - self.terminal_gamma
-            # For the terminal state, all actions lead to the terminal state itself
-            P_changed[self.n_states - 1, self.n_states - 1, :] = 1
-
-            P_changed[self.states_for_object, :-1, :] *= self.terminal_gamma
-            return P_changed
-        else:
-            return P
+        return P
 
     def get_possible_actions_within_grid(self, state:int):
         """
@@ -180,6 +162,10 @@ class Environment:
         """
 
         possible_actions = []
+
+        if state == self.grid_size_full*self.grid_size_full -1:
+            return np.array(possible_actions, dtype=int)
+        
         state_x, state_y = state // self.grid_size_full, state % self.grid_size_full
         if ((state_x > 0)): possible_actions.append(self.actions["up"])
         if ((state_x < self.grid_size_full - 1)): possible_actions.append(self.actions["down"])
@@ -206,6 +192,10 @@ class Environment:
             indices of possible next states
         """
         next_state = []
+
+        if state == self.grid_size_full*self.grid_size_full -1:
+            return np.array(possible_actions, dtype=int)
+        
         state_x, state_y = state // self.grid_size_full, state % self.grid_size_full
         for a in possible_actions:
             if a == 0: next_state.append((state_x - 1) * self.grid_size_full + state_y)
@@ -226,26 +216,9 @@ class Environment:
         init_state_neighbourhood : list[int]
         """
         init_state_neighbourhood = []
-        states = self.grid_size_full * self.grid_size_full
         initial_dist = np.zeros(self.n_states)
-        if self.grid_size_full % 2 == 1:
-            init_state = states//2
-            initial_dist[init_state] = 1
 
-        else:
-            init_states_array = []
-            central_state_1d = states // 2
-            central_state_2d_1 = central_state_1d - (self.grid_size_full - 1)//2 - 1
-            init_states_array.append(central_state_2d_1)
-            central_state_2d_2 = central_state_1d - (self.grid_size_full - 1) // 2 - 2
-            init_states_array.append(central_state_2d_2)
-            central_state_2d_3 = central_state_1d + (self.grid_size_full - 1) // 2 + 0
-            init_states_array.append(central_state_2d_3)
-            central_state_2d_4 = central_state_1d + (self.grid_size_full - 1) // 2 + 1
-            init_states_array.append(central_state_2d_4)
-
-            init_state = self.rng.choice(init_states_array, p=np.ones(len(init_states_array))/len(init_states_array))
-            initial_dist[init_state] = 1
+        init_state=0
 
         x, y = self.int_to_point(init_state)
         # compute states which should be in one 1x1 neighborhood of init state
@@ -268,12 +241,30 @@ class Environment:
         states = self.grid_size_full * self.grid_size_full
 
         state_object_array = np.zeros((states, self.n_objects))
-        states_to_choose_from = np.setdiff1d(range(states), self.init_state_neighbourhood)
-        # choose and fix states for each objects randomly
-        states_for_object = self.rng.choice(states_to_choose_from, size=self.n_objects_each * self.n_objects, replace=False)
-        for i, s in enumerate(states_for_object):
-            state_object_array[s, i%self.n_objects] = 1
-        return state_object_array, states_for_object
+
+        # object 0 = circle
+        # object 1 = triangle
+        # object 2 = rectangle
+
+        for i in range(1, self.grid_size_full-1):
+            # object 0 on the entire left boundary
+            state_object_array[self.point_to_int(0,i), 0] = 1
+
+        for i in range(self.grid_size_full):
+            # object 0 on the entire upper boundary
+            state_object_array[self.point_to_int(self.grid_size_full-1, i), 0] = 1
+
+        state_object_array[self.point_to_int(1,0), 0] = 1
+
+        state_object_array[self.point_to_int(1,1), 1] = 1
+        state_object_array[self.point_to_int(3,3), 1] = 1
+        
+        state_object_array[self.point_to_int(4,0), 2] = 1
+        state_object_array[self.point_to_int(5,2), 2] = 1
+        state_object_array[self.point_to_int(5,3), 2] = 1
+        state_object_array[self.point_to_int(4,4), 2] = 1
+
+        return state_object_array
 
 
     def int_to_point(self, i:int):
@@ -368,13 +359,7 @@ class Environment:
         f = fignum
         plt.figure(f)
 
-        if self.terminal_state == 1:
-            reward = reward[:-1]
-            V = V[:-1]
-            pi = pi[:-1]
-            states = self.n_states -1
-        else:
-            states = self.n_states
+        states = self.n_states
 
         reshaped_reward = copy.deepcopy(reward.reshape((self.grid_size_full, self.grid_size_full)))
         reshaped_reward = np.flip(reshaped_reward, 0)
@@ -412,3 +397,31 @@ class Environment:
             plt.title(strname + " Opt values and policy")
         if show:
             plt.show()
+
+    def get_demonstrators_reward(self):
+
+        reward = np.zeros(self.n_states)
+
+        for i in range(self.n_states):
+            if self.state_object_array[i, 0]:
+                reward[i] = 0.5
+            elif self.state_object_array[i, 1]:
+                reward[i] = 0.25
+            elif self.state_object_array[i, 2]:
+                reward[i] = 1.75
+            else:
+                reward[i] = -1
+
+        return reward
+
+if __name__ == "main":
+
+    config_env2 = {"gridsizefull": 10,
+                "theta_e": [1],
+                "theta_v": [[0.0]],
+                "gamma": 1.0,
+                }
+
+    env = Environment(config_env2)
+
+    env.draw(True)
