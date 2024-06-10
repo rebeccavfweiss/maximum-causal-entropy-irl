@@ -1,9 +1,8 @@
 import agent
 import demonstrator
-import env_special
+import environment
 import MDPSolver
 import numpy as np
-from tqdm import tqdm
 
 # number of object-worlds to average over
 n_average = 1
@@ -34,19 +33,35 @@ def create_env(rng=None):
                 }
     
     config_env3 = {"gridsizefull": 6,
-                "theta_e": [0.0, 0.0, 0.0],
-                "theta_v": [[0.0,0.0,0.0],
-                            [0.0,0.0,0.0],
-                            [0.0,0.0,0.0]],
-                "gamma": 1.0}
-    env = env_special.Environment(config_env3, rng)
+                "theta_e": [0.5, 0.25, 1.75, -1.0],
+                "theta_v": [[0.0,0.0,0.0, 0.0],
+                            [0.0,0.0,0.0, 0.0],
+                            [0.0,0.0,0.0, 0.0],
+                            [0.0, 0.0, 0.0, 0.0]],
+                "gamma": 1.0,
+                "object_rewards": [0.5, 0.25, 1.75]}
+    
+    config_env4 = {"gridsizefull": 6,
+                "theta_e": [1.0, -1.0],
+                "theta_v": [[0.0, 0.0],
+                            [0.0, 0.0]],
+                "gamma": 0.5,
+                "object_rewards": [10240/1023, 1566720/160177 , 497509888/5285841]}
+    
+    config_env5 = {"gridsizefull": 6,
+                "theta_e": [1.0, -2.0],
+                "theta_v": [[0.0, 0.0],
+                            [0.0, 0.0]],
+                "gamma": 1.0,
+                "object_rewards": [0.5, 0.25, 1.75]}
+    env = environment.Environment(config_env5, rng)
     env.reward = env.get_demonstrators_reward()
 
     return env
 
 def create_config_learner():
     config_default_learner = {"tol": 0.0005,
-                                "miniter": 25,
+                                "miniter": 10,
                                 "maxiter": 300
                             }
 
@@ -54,53 +69,64 @@ def create_config_learner():
 
 if __name__ == "__main__":
 
-    results_expectation = []
-    results_variance = []
-
     show = True
+    verbose = False
+    T = 10
 
-    for seed in tqdm(range(n_average)):
-        rng = np.random.RandomState(seed)
+    rng = np.random.RandomState(0)
 
-        # create the environment
-        env = create_env(rng)
+    # create the environment
+    env = create_env(rng)
 
-        # Learner config
-        config_default_learner = create_config_learner()
+    # Learner config
+    config_default_learner = create_config_learner()
 
-        # create teacher
-        demonstrator = demonstrator.Demonstrator(env, demonstrator_name="demonstrator")
-        demonstrator.draw(show)
+    #print(env.reward.reshape((env.grid_size_full, env.grid_size_full)))
+    #print(env.get_transition_matrix(randomMoveProb=0.0))
 
-        # create agent that uses only expectation matching
-        learner = agent.Agent(env, demonstrator.mu_demonstrator, config_default_learner, agent_name="agent_expectation", solver=MDPSolver.MDPSolverExpectation())
-        learner.batch_MCE(verbose=False)
-        learner.compute_and_draw(show)
-        reward = np.dot(env.reward, learner.solver.computeFeatureSVF_bellmann(env, learner.pi)[0])
-        results_expectation.append(reward)
+    # create teacher
+    demo = demonstrator.Demonstrator(env, demonstrator_name="demonstrator")
+    demo.draw(show)
 
-        # create agent that also matches variances
-        learner = agent.Agent(env, demonstrator.mu_demonstrator, config_default_learner, agent_name="agent_variance", solver=MDPSolver.MDPSolverVariance())
-        learner.batch_MCE(verbose=False)
-        learner.compute_and_draw(show)
-        reward = np.dot(env.reward, learner.solver.computeFeatureSVF_bellmann(env, learner.pi)[0])
-        results_variance.append(reward)
+    print("Demonstrator done")
 
-        tqdm.write("Result for seed %i: %f / %f" % (seed, results_expectation[-1], results_variance[-1]))
+    print(demo.mu_demonstrator)
+    reward = np.dot(env.reward, demo.solver.computeFeatureSVF_bellmann(env, demo.pi)[0])
+    print(reward)
 
-    
-    results_expectation = np.array(results_expectation)
-    results_variance = np.array(results_variance)
+    # create agent that uses only expectation matching
+    learner = agent.Agent(env, demo.mu_demonstrator, config_default_learner, agent_name="agent_expectation", solver=MDPSolver.MDPSolverExpectation(T))
+    learner.batch_MCE(verbose=verbose)
+
+    print(learner.theta_e, learner.theta_v)
+    learner.compute_and_draw(show)
+    reward = np.dot(env.reward, learner.solver.computeFeatureSVF_bellmann(env, learner.pi)[0])
+    results_expectation = reward
+
+    print("first learner done")
+
+    # create agent that also matches variances
+    learner = agent.Agent(env, demo.mu_demonstrator, config_default_learner, agent_name="agent_variance", solver=MDPSolver.MDPSolverVariance(T))
+    learner.batch_MCE(verbose=verbose)
+    print(learner.theta_e, learner.theta_v)
+    learner.compute_and_draw(show)
+    reward = np.dot(env.reward, learner.solver.computeFeatureSVF_bellmann(env, learner.pi)[0])
+    results_variance = reward
+
+    print("second done")
+
+    #results_expectation = np.array(results_expectation)
+    #results_variance = np.array(results_variance)
 
     print("-- STATISTICS --")
     print("----Expectation -----")
-    print("means:", np.mean(results_expectation))
-    print("std-err:", np.std(results_expectation))
+    print("reward: ", results_expectation)
+    #print("std-err:", np.std(results_expectation))
     print("")
 
     print("----variance -----")
-    print("means:", np.mean(results_variance))
-    print("std-err:", np.std(results_variance))
+    print("reward: ", results_variance)
+    #print("std-err:", np.std(results_variance))
 
 
 
