@@ -50,6 +50,7 @@ class Environment:
         self.n_features = self.feature_matrix.shape[1]
 
         self.reward = self.get_reward_for_given_theta(self.theta_e)
+        self.variance = self.get_variance_for_given_theta(np.array(self.theta_v))
         self.T = self.get_transition_matrix()
         self.T_sparse_list = self.get_transition_sparse_list()
 

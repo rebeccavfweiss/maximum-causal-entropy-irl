@@ -475,7 +475,7 @@ class MDPSolverExpectation(MDPSolver):
         finite horizon value
     """
 
-    def __init__(self, T: int):
+    def __init__(self, T: int=10):
         super().__init__(T)
 
     def soft_valueIteration(self, env: Environment, values: dict[str:any]):
@@ -580,7 +580,7 @@ class MDPSolverVariance(MDPSolver):
         finite horizon value
     """
 
-    def __init__(self, T: int):
+    def __init__(self, T: int=10):
         super().__init__(T)
 
     def soft_valueIteration(self, env: Environment, values: dict[str:any]):

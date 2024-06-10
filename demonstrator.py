@@ -49,6 +49,7 @@ class Demonstrator:
         self.pi = pi_s
 
         _, mu, nu = self.solver.computeFeatureSVF_bellmann_averaged(env, pi_s)
+
         return (
             mu[: env.n_features_reward],
             nu[: env.n_features_reward, : env.n_features_reward],

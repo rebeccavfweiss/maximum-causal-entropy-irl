@@ -55,14 +55,16 @@ class Agent:
 
         self.agent_name = agent_name
 
-    def compute_and_draw(self, show: bool = False):
+    def compute_and_draw(self, show: bool = False, store:bool = False):
         """
         computes soft_value iteration for given thetas and policy based on the result and draws policy
 
         Parameters
         ----------
         show : bool
-            whether or not the plot should be shown (default = false)
+            whether or not the plots should be shown (default = false)
+        store : bool
+            whether or not the plots should be stored (default = false)
         """
         self.reward = self.get_reward_for_given_thetas()
         self.variance = self.get_variance_for_given_thetas()
@@ -74,7 +76,7 @@ class Agent:
         self.V = self.solver.computeValueFunction_bellmann_averaged(
             self.env, self.pi, dict(reward=self.env.reward, variance=self.env.variance)
         )  # this is value of agent's policy w.r.t. env's reward
-        self.env.draw(self.V, self.pi, self.reward, show, self.agent_name, 0)
+        self.env.draw(self.V, self.pi, self.reward, show, self.agent_name, 0, store)
 
     def get_reward_for_given_thetas(self):
         """
