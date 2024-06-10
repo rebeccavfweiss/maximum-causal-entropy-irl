@@ -1,7 +1,7 @@
 import MDPSolver
 import numpy as np
 import copy
-from env_special import Environment
+from environment import Environment
 
 _largenum = 1000000
 
@@ -11,7 +11,7 @@ class Agent:
     
     Parameters
     ----------
-    env : env_special.Environment
+    env : environment.Environment
         the environment representing the setting of the problem
     mu_demonstrator : tuple[float, float]
         feature expectation and variance terms of the demonstrator
@@ -91,7 +91,7 @@ class Agent:
 
         Returns
         -------
-        ?????
+        feature expectation and variance, once restricted to the reward features, once the full arrays
         """
         reward_agent = self.get_reward_for_given_thetas()
         variance_agent = self.get_variance_for_given_thetas()
