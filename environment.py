@@ -279,13 +279,12 @@ class Environment:
         # get feature for objects (is present on this state)
         if self.state_object_array[state, 0] != 0:
             feature_vector[0] = self.state_object_array[state, 0]
-            feature_vector[-1] = 0.5 # cost of taking a step that contains an object
-        else:
-            feature_vector[-1] = 1 # cost of taking any other step
 
         if state == self.n_states - 1:
             feature_vector[-1] = -2  # feature that state is the target state
-
+        else:
+            feature_vector[-1] = 1 # cost of taking any other step
+            
         return feature_vector
 
     def get_state_feature_matrix_full(self):
@@ -370,10 +369,11 @@ class Environment:
         )
         reshaped_reward = np.flip(reshaped_reward, 0)
         plt.pcolor(reshaped_reward)
+        plt.colorbar()
         plt.title(strname + ": reward function")
         if store:
             plt.savefig(f"plots\{strname}_reward.jpg", format="jpg")
-        plt.colorbar()
+        
         f += 1
         if V is not None:
             plt.figure(f)
