@@ -39,8 +39,8 @@ if __name__ == "__main__":
     config_default_learner = create_config_learner()
 
     # create demonstrator
-    demo = demonstrator.Demonstrator(env, demonstrator_name="demonstrator")
-    demo.draw(show)
+    demo = demonstrator.Demonstrator(env, demonstrator_name="Demonstrator")
+    demo.draw(show, store, 0)
 
     if verbose:
         print("Demonstrator done")
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     # create agent that uses only expectation matching
     agent_expectation = agent.Agent(env, demo.mu_demonstrator, config_default_learner, agent_name="Agent Expectation", solver=MDPSolver.MDPSolverExpectation())
     agent_expectation.batch_MCE(verbose=verbose)
-    agent_expectation.compute_and_draw(show, store)
+    agent_expectation.compute_and_draw(show, store, 2)
     reward_expectation = np.dot(env.reward, agent_expectation.solver.computeFeatureSVF_bellmann(env, agent_expectation.pi)[0])
 
     if verbose:
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     # create agent that also matches variances
     agent_variance = agent.Agent(env, demo.mu_demonstrator, config_default_learner, agent_name="Agent Variance", solver=MDPSolver.MDPSolverVariance())
     agent_variance.batch_MCE(verbose=verbose)
-    agent_variance.compute_and_draw(show, store)
+    agent_variance.compute_and_draw(show, store, 4)
     reward_variance = np.dot(env.reward, agent_variance.solver.computeFeatureSVF_bellmann(env, agent_variance.pi)[0])
 
     if verbose:
@@ -69,16 +69,18 @@ if __name__ == "__main__":
 
     print("----- Demonstrator -----")
     print("reward: ", reward_demonstrator)
-    print("theta_e: ", env.theta_e)
+    print("theta_*: ", env.theta_e)
     print("")
 
     print("----- Expectation -----")
-    print("reward: ", reward_expectation)
+    print("reward: ", reward_expectation, " (diff. to demonstrator: ", np.abs(reward_demonstrator-reward_expectation), ")")
     print("theta_e: ", agent_expectation.theta_e)
+    print("policy difference:", sum(np.linalg.norm(demo.pi[i,:,:] - agent_expectation.pi[i,:,:], ord = "fro") for i in range(demo.pi.shape[0])))
     print("")
 
     print("----- Expectation + Variance -----")
-    print("reward: ", reward_variance)
+    print("reward: ", reward_variance, " (diff. to demonstrator: ", np.abs(reward_demonstrator-reward_variance), ")")
     print("theta_e: ", agent_variance.theta_e)
     print("theta_v: ", agent_variance.theta_v)
+    print("policy difference:", sum(np.linalg.norm(demo.pi[i,:,:] - agent_variance.pi[i,:,:], ord ="fro") for i in range(demo.pi.shape[0])))
     
