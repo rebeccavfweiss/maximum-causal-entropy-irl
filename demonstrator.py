@@ -55,10 +55,19 @@ class Demonstrator:
             nu[: env.n_features_reward, : env.n_features_reward],
         )
 
-    def draw(self, show=False):
+    def draw(self, show:bool=False, store:bool=False, fignum:int=0):
         """
         draws the policy of the demonstrator as long as it has been computed before, else a warning is thrown
+
+        Parameters
+        ----------
+        show : bool
+            whether or not the plot should be shown (default = False)
+        store : bool
+            whether or not the plot should be stored (default = False)
+        fignum : int
+            identifier number for the figure (default = 0)
         """
 
         self.reward = copy.deepcopy(self.env.reward)
-        self.env.draw(self.V, self.pi, self.reward, show, self.demonstrator_name, 0)
+        self.env.draw(self.V, self.pi, self.reward, show, self.demonstrator_name, fignum, store)
