@@ -75,8 +75,8 @@ class MDPSolver(ABC):
             pi_s[t, :, :] = Q[t, :, :] - np.max(Q[t, :, :], axis=1)[:, None]
             pi_s[t, :, :][
                 np.where((-1e-12 <= pi_s[t, :, :]) & (pi_s[t, :, :] <= 1e-12))
-            ] = 1
-            pi_s[t, :, :][np.where(pi_s[t, :, :] <= 0)] = 0
+            ] = 1.0
+            pi_s[t, :, :][np.where(pi_s[t, :, :] <= 0.0)] = 0.0
             pi_s[t, :, :] = pi_s[t, :, :] / pi_s[t, :, :].sum(axis=1)[:, None]
 
         return Q, V, pi_d, pi_s
@@ -299,7 +299,7 @@ class MDPSolver(ABC):
 
         for t in range(self.T):
             for i in range(env.n_states):
-                stochasticPolicy[t][i][deterministicPolicy[t, i]] = 1
+                stochasticPolicy[t][i][deterministicPolicy[t, i]] = 1.0
 
         return stochasticPolicy
 
@@ -400,7 +400,7 @@ class MDPSolver(ABC):
 
         # Creating a T matrix for the policy
         T_pi = self.get_T_pi(env, changed_policy)
-        T_pi[:, -1, :] = 0
+        T_pi[:, -1, :] = 0.0
 
         T_pi_sparse = [sparse.csr_matrix(T_pi[t].transpose()) for t in range(self.T)]
 
