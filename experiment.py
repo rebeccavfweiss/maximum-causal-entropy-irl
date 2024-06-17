@@ -8,7 +8,7 @@ import numpy as np
 def create_env():
     
     config_env = {"gridsizefull": 6,
-                "theta_e": [1.0, -1.0],
+                "theta_e": [1.0, 2.0],
                 "theta_v": [[0.0, 0.0],
                             [0.0, 0.0]],
                 "gamma": 1.0,
