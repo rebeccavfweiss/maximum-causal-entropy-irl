@@ -277,14 +277,14 @@ class Environment:
         feature_vector = np.zeros(self.n_features_full)
 
         # get feature for objects (is present on this state)
-        if self.state_object_array[state, 0] != 0:
-            feature_vector[0] = self.state_object_array[state, 0]
+        if self.state_object_array[state] != 0:
+            feature_vector[0] = self.state_object_array[state]
 
         if state == self.n_states - 1:
-            feature_vector[-1] = -2  # feature that state is the target state
+            feature_vector[-1] = 1  # feature that state is the target state
         else:
-            feature_vector[-1] = 1 # cost of taking any other step
-            
+            feature_vector[-1] = -1 # cost of taking any other step
+
         return feature_vector
 
     def get_state_feature_matrix_full(self):
