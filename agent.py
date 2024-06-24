@@ -37,10 +37,8 @@ class Agent:
     ):
         self.env = env
         self.mu_demonstrator = mu_demonstrator
-        self.theta_e = np.zeros(self.env.n_features_reward)
-        self.theta_v = np.zeros(
-            (self.env.n_features_reward, self.env.n_features_reward)
-        )
+        self.theta_e = np.zeros(self.env.n_features)
+        self.theta_v = np.zeros((self.env.n_features, self.env.n_features))
 
         self.tol = config_agent["tol"]
         self.maxiter = config_agent["maxiter"]
@@ -55,16 +53,18 @@ class Agent:
 
         self.agent_name = agent_name
 
-    def compute_and_draw(self, show: bool = False, store:bool = False, fignum:int=0):
+    def compute_and_draw(
+        self, show: bool = False, store: bool = False, fignum: int = 0
+    ):
         """
         computes soft_value iteration for given thetas and policy based on the result and draws policy
 
         Parameters
         ----------
         show : bool
-            whether or not the plots should be shown (default = false)
+            whether or not the plots should be shown (default = False)
         store : bool
-            whether or not the plots should be stored (default = false)
+            whether or not the plots should be stored (default = False)
         fignum : int
             identifier number for figure (default = 0)
         """
@@ -76,9 +76,17 @@ class Agent:
         self.pi = pi_agent
 
         self.V = self.solver.computeValueFunction_bellmann_averaged(
-            self.env, self.pi, dict(reward=self.env.reward, variance=self.env.variance)
-        )  # this is value of agent's policy w.r.t. env's reward
-        self.env.draw(self.V, self.pi, self.reward, show, self.agent_name, fignum, store)
+            self.env,
+            self.pi,
+            dict(
+                reward=self.env.reward,
+                variance=np.zeros((self.env.n_features, self.env.n_features)),
+            ),
+        )  # compute the value function w.r.t to true reward parameters
+
+        self.env.draw(
+            self.V, self.pi, self.reward, show, self.agent_name, fignum, store
+        )
 
     def get_reward_for_given_thetas(self):
         """
@@ -88,9 +96,8 @@ class Agent:
         -------
         reward : numpy.ndarray
         """
-        reward = self.theta_e
-        reward = self.env.get_reward_for_given_theta(reward)
-        return reward
+
+        return self.env.get_reward_for_given_theta(self.theta_e)
 
     def get_variance_for_given_thetas(self):
         """
@@ -100,9 +107,8 @@ class Agent:
         -------
         variance : numpy.ndarray
         """
-        variance = self.theta_v
-        variance = self.env.get_variance_for_given_theta(variance)
-        return variance
+
+        return self.env.get_variance_for_given_theta(self.theta_v)
 
     def get_mu_soft(self):
         """
@@ -114,13 +120,11 @@ class Agent:
         """
         reward_agent = self.get_reward_for_given_thetas()
         variance_agent = self.get_variance_for_given_thetas()
-        Q, V, pi_s = self.solver.soft_valueIteration(
+        _, _, pi_s = self.solver.soft_valueIteration(
             self.env, dict(reward=reward_agent, variance=variance_agent)
         )
         _, mu, nu = self.solver.computeFeatureSVF_bellmann_averaged(self.env, pi_s)
         return (
-            mu[: self.env.n_features_reward],
-            nu[: self.env.n_features_reward, : self.env.n_features_reward],
             mu,
             nu,
         )
@@ -135,24 +139,25 @@ class Agent:
         ----------
         verbose : bool
             whether or not intermediate output should be displayed (by default true)
+
+        Returns
+        -------
+        int
+            number of iterations used until convergence
         """
 
         calc_theta_v = isinstance(self.solver, MDPSolver.MDPSolverVariance)
 
-        theta_e_pos = np.zeros(self.env.n_features_reward)
-        theta_e_neg = np.zeros(self.env.n_features_reward)
-        self.theta_e = theta_e_pos - theta_e_neg
+        theta_e_pos = np.zeros(self.env.n_features)
+        theta_e_neg = np.zeros(self.env.n_features)
+        self.theta_e = np.zeros(self.env.n_features)
 
         if calc_theta_v:
-            theta_v_pos = np.zeros(
-                (self.env.n_features_reward, self.env.n_features_reward)
-            )
-            theta_v_neg = np.zeros(
-                (self.env.n_features_reward, self.env.n_features_reward)
-            )
+            theta_v_pos = np.zeros((self.env.n_features, self.env.n_features))
+            theta_v_neg = np.zeros((self.env.n_features, self.env.n_features))
             self.theta_v = theta_v_pos - theta_v_neg
 
-        mu_reward_agent, mu_variance_agent, _, _ = self.get_mu_soft()
+        mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
         if verbose:
             print("\n========== batch_MCE for " + self.agent_name + " =======")
@@ -165,25 +170,28 @@ class Agent:
 
             if verbose:
                 print("t=", t)
-                print("...eta=", eta)
+                print("...eta_e=", eta)
                 print(
                     "...mu_reward_agent=",
                     mu_reward_agent,
+                    " mu_variance_agent=",
+                    mu_variance_agent,
                     " mu_demonstrator=",
                     self.mu_demonstrator[0],
+                    " nu_demonstrator=",
+                    self.mu_demonstrator[1],
                 )
                 print("...theta_e=", self.theta_e)
                 print("...theta_v=", self.theta_v)
 
-            # update lambda
             theta_e_pos_old = copy.deepcopy(theta_e_pos)
             theta_e_neg_old = copy.deepcopy(theta_e_neg)
             theta_e_old = copy.deepcopy(self.theta_e)
+            # update lambda
 
-            if calc_theta_v:
-                theta_v_pos_old = copy.deepcopy(theta_v_pos)
-                theta_v_neg_old = copy.deepcopy(theta_v_neg)
-                theta_v_old = copy.deepcopy(self.theta_v)
+            theta_e_pos_old = copy.deepcopy(theta_e_pos)
+            theta_e_neg_old = copy.deepcopy(theta_e_neg)
+            theta_e_old = copy.deepcopy(self.theta_e)
 
             theta_e_pos = theta_e_pos_old - eta * (
                 mu_reward_agent - self.mu_demonstrator[0]
@@ -192,14 +200,6 @@ class Agent:
                 self.mu_demonstrator[0] - mu_reward_agent
             )
 
-            if calc_theta_v:
-                theta_v_pos = theta_v_pos_old - eta * (
-                    mu_variance_agent - self.mu_demonstrator[1]
-                )
-                theta_v_neg = theta_v_neg_old - eta * (
-                    self.mu_demonstrator[1] - mu_variance_agent
-                )
-
             theta_e_pos = np.maximum(theta_e_pos, 0)
             theta_e_neg = np.maximum(theta_e_neg, 0)
             theta_e_pos = np.minimum(theta_e_pos, self.theta_upperBound)
@@ -207,6 +207,17 @@ class Agent:
             self.theta_e = theta_e_pos - theta_e_neg
 
             if calc_theta_v:
+                theta_v_pos_old = copy.deepcopy(theta_v_pos)
+                theta_v_neg_old = copy.deepcopy(theta_v_neg)
+                theta_v_old = copy.deepcopy(self.theta_v)
+
+                theta_v_pos = theta_v_pos_old - eta * (
+                    mu_variance_agent - self.mu_demonstrator[1]
+                )
+                theta_v_neg = theta_v_neg_old - eta * (
+                    self.mu_demonstrator[1] - mu_variance_agent
+                )
+
                 theta_v_pos = np.maximum(theta_v_pos, 0)
                 theta_v_neg = np.maximum(theta_v_neg, 0)
                 theta_v_pos = np.minimum(theta_v_pos, self.theta_upperBound)
@@ -214,7 +225,7 @@ class Agent:
                 self.theta_v = theta_v_pos - theta_v_neg
 
             # update state
-            mu_reward_agent, mu_variance_agent, _, _ = self.get_mu_soft()
+            mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
             diff_L2_norm_theta_e = np.linalg.norm(theta_e_old - self.theta_e)
 
@@ -229,7 +240,7 @@ class Agent:
             # decide whether to continue
             if calc_theta_v:
                 if (diff_L2_norm_theta_e < self.tol) and (
-                    diff_L2_norm_theta_v < self.tol
+                    diff_L2_norm_theta_v < 3 * self.tol
                 ):
                     if t >= self.miniter:
                         break
@@ -241,3 +252,8 @@ class Agent:
                 break
 
             t += 1
+
+        if verbose:
+            print(f"Terminated in {t} iterations")
+
+        return t

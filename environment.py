@@ -19,7 +19,6 @@ class Environment:
         environment definition parameters consisting of:
         - gamma : MDP discounting factor
         - theta_e : the real reward parameters
-        - object_rewards : the rewards for the different kinds of objects
     """
 
     def __init__(self, env_args: dict):
@@ -28,29 +27,25 @@ class Environment:
         self.actions = {"up": 0, "left": 1, "down": 2, "right": 3}
         self.actions_names = ["up", "left", "down", "right"]
         self.n_actions = len(self.actions)
-        self.grid_size_full = 6
+        self.grid_x = 9
+        self.grid_y = 5
         self.gamma = env_args["gamma"]
 
-        self.n_features_reward = len(env_args["theta_e"])
         self.theta_e = env_args["theta_e"]
-        self.theta_v = env_args["theta_v"]
-        self.n_features_full = len(
+        self.n_features = len(
             env_args["theta_e"]
-        )  # (=2) one for each object, and whether terminal state
+        )  # (=3) two for the objects, and whether terminal state
 
-        self.n_states = self.grid_size_full * self.grid_size_full
+        self.n_states = self.grid_x * self.grid_y
 
-        self.object_rewards = env_args["object_rewards"]
+        self.terminal_states = self.compute_terminal_states()
 
         self.InitD, self.init_state_neighbourhood = self.get_initial_distribution()
         self.state_object_array = self.place_objects_on_the_grid()
-        self.feature_matrix_full = self.get_state_feature_matrix_full()
-
         self.feature_matrix = self.get_state_feature_matrix()
         self.n_features = self.feature_matrix.shape[1]
 
         self.reward = self.get_reward_for_given_theta(self.theta_e)
-        self.variance = self.get_variance_for_given_theta(np.array(self.theta_v))
         self.T = self.get_transition_matrix()
         self.T_sparse_list = self.get_transition_sparse_list()
 
@@ -80,7 +75,7 @@ class Environment:
         variance : ndarray
         """
         variance = [
-            theta_v.dot(self.feature_matrix[i, :]).dot(self.feature_matrix[i, :])
+            (theta_v.dot(self.feature_matrix[i, :])).dot(self.feature_matrix[i, :])
             for i in range(self.feature_matrix.shape[0])
         ]
 
@@ -109,11 +104,13 @@ class Environment:
         P : ndarray
             transition matrix
         """
-        # Contructs the Transition Matrix
-        # Explicitly put n_states = self.grid_size_full_x * self.grid_size_full_y
+
         P = np.zeros((self.n_states, self.n_states, self.n_actions))
-        # last state is the goal state -> no possible actions from there
-        for s in range(self.n_states - 1):
+
+        for s in range(self.n_states):
+            if s in self.terminal_states:
+                continue
+
             curr_state = s
             possible_actions = self.get_possible_actions_within_grid(s)
             next_states = self.get_next_states(curr_state, possible_actions)
@@ -141,17 +138,17 @@ class Environment:
 
         possible_actions = []
 
-        if state == self.n_states - 1:
+        if state in self.terminal_states:
             return np.array(possible_actions, dtype=int)
 
-        state_x, state_y = state // self.grid_size_full, state % self.grid_size_full
+        state_x, state_y = state // self.grid_y, state % self.grid_y
         if state_x > 0:
             possible_actions.append(self.actions["up"])
-        if state_x < self.grid_size_full - 1:
+        if state_x < self.grid_x - 1:
             possible_actions.append(self.actions["down"])
         if state_y > 0:
             possible_actions.append(self.actions["left"])
-        if state_y < self.grid_size_full - 1:
+        if state_y < self.grid_y - 1:
             possible_actions.append(self.actions["right"])
 
         possible_actions = np.array(possible_actions, dtype=int)
@@ -175,16 +172,16 @@ class Environment:
         """
         next_state = []
 
-        state_x, state_y = state // self.grid_size_full, state % self.grid_size_full
+        state_x, state_y = state // self.grid_y, state % self.grid_y
         for a in possible_actions:
             if a == 0:
-                next_state.append((state_x - 1) * self.grid_size_full + state_y)
+                next_state.append((state_x - 1) * self.grid_y + state_y)
             if a == 1:
-                next_state.append(state_x * self.grid_size_full + state_y - 1)
+                next_state.append(state_x * self.grid_y + state_y - 1)
             if a == 2:
-                next_state.append((state_x + 1) * self.grid_size_full + state_y)
+                next_state.append((state_x + 1) * self.grid_y + state_y)
             if a == 3:
-                next_state.append(state_x * self.grid_size_full + state_y + 1)
+                next_state.append(state_x * self.grid_y + state_y + 1)
 
         next_state = np.array(next_state, dtype=int)
         return next_state
@@ -201,22 +198,39 @@ class Environment:
         init_state_neighbourhood = []
         initial_dist = np.zeros(self.n_states)
 
-        init_state = 0
+        self.init_state = self.point_to_int(4, 0)
 
-        initial_dist[init_state] = 1.0
+        initial_dist[self.init_state] = 1.0
 
-        x, y = self.int_to_point(init_state)
+        x, y = self.int_to_point(self.init_state)
         # compute states which should be in one 1x1 neighborhood of init state
 
         for dx, dy in product(
             range(-1, 2), range(-1, 2)
         ):  # get 1x1 neighborhood init state
-            if 0 <= x + dx < self.grid_size_full and 0 <= y + dy < self.grid_size_full:
+            if 0 <= x + dx < self.grid_x and 0 <= y + dy < self.grid_y:
                 neighbour_x = x + dx
                 neighbour_y = y + dy
                 neighbour_state = self.point_to_int(neighbour_x, neighbour_y)
                 init_state_neighbourhood.append(neighbour_state)
         return initial_dist, init_state_neighbourhood
+
+    def compute_terminal_states(self):
+        """
+        Stores the indices of the target states
+
+        Returns
+        -------
+        terminal_states : list[int]
+            list of the target states
+        """
+
+        terminal_states = []
+        terminal_states.append(self.point_to_int(0, 0))
+        terminal_states.append(self.point_to_int(self.grid_x - 1, 0))
+        terminal_states.append(self.point_to_int(4, self.grid_y - 1))
+
+        return terminal_states
 
     def place_objects_on_the_grid(self):
         """
@@ -224,30 +238,18 @@ class Environment:
         -------
         state_object_array : ndarray
         """
-        states = self.grid_size_full * self.grid_size_full
 
-        state_object_array = np.zeros((states, 1))
+        state_object_array = np.zeros((self.n_states, 3))
 
-        for i in range(1, self.grid_size_full - 1):
-            # object 0 on the entire upper boundary
-            state_object_array[self.point_to_int(0, i)] += self.object_rewards[0]
+        # place the objects
 
-        for i in range(self.grid_size_full):
-            # object 0 on the entire right boundary
-            state_object_array[
-                self.point_to_int(i, self.grid_size_full - 1)
-            ] += self.object_rewards[0]
+        # object 0 = triangle
+        # object 1 = diamond
+        # object 2 = square
+        state_object_array[self.point_to_int(2, 0), 0] = 1
 
-        # place the rest of the objects
-        state_object_array[self.point_to_int(1, 0)] += self.object_rewards[0]
-
-        state_object_array[self.point_to_int(1, 1)] += self.object_rewards[1]
-        state_object_array[self.point_to_int(3, 3)] += self.object_rewards[1]
-
-        state_object_array[self.point_to_int(4, 0)] += self.object_rewards[2]
-        state_object_array[self.point_to_int(5, 2)] += self.object_rewards[2]
-        state_object_array[self.point_to_int(5, 3)] += self.object_rewards[2]
-        state_object_array[self.point_to_int(4, 4)] += self.object_rewards[2]
+        state_object_array[self.point_to_int(4, 2), 1] = 1
+        state_object_array[self.point_to_int(6, 0), 2] = 1
 
         return state_object_array
 
@@ -257,7 +259,7 @@ class Environment:
         -------
         tuple[int,int] :  representing the coordinate for the given state
         """
-        return (i // self.grid_size_full, i % self.grid_size_full)
+        return (i // self.grid_y, i % self.grid_y)
 
     def point_to_int(self, x: int, y: int):
         """
@@ -265,7 +267,7 @@ class Environment:
         -------
         int : index of the state within the enumeration given its coordinates
         """
-        return x * self.grid_size_full + y
+        return x * self.grid_y + y
 
     def get_state_feature_vector_full(self, state: int):
         """
@@ -274,42 +276,39 @@ class Environment:
         feature_vector : ndarray
             represents the features of the given state
         """
-        feature_vector = np.zeros(self.n_features_full)
+        feature_vector = np.zeros(self.n_features)
 
         # get feature for objects (is present on this state)
-        if self.state_object_array[state] != 0:
-            feature_vector[0] = self.state_object_array[state]
+        if self.state_object_array[state, 0] != 0:
+            feature_vector[0] = 2
 
-        if state == self.n_states - 1:
-            feature_vector[-1] = 1  # feature that state is the target state
+        if self.state_object_array[state, 1] != 0:
+            feature_vector[0] = 1
+            feature_vector[1] = 1
+
+        if self.state_object_array[state, 2] != 0:
+            feature_vector[1] = 2
+
+        if state in self.terminal_states:
+            feature_vector[0] = 1
+            feature_vector[1] = 1
+            feature_vector[2] = 1  # features that state is the target state
         else:
-            feature_vector[-1] = -1 # cost of taking any other step
+            feature_vector[-1] = 1  # cost of taking any other step
 
         return feature_vector
 
-    def get_state_feature_matrix_full(self):
+    def get_state_feature_matrix(self):
         """
         Returns
         -------
         feature_matrix : ndarray
             representing full feature matrix
         """
-        states = self.grid_size_full * self.grid_size_full
-        feature_matrix = np.zeros((self.n_states, self.n_features_full))
-        for i in range(states):
+        feature_matrix = np.zeros((self.n_states, self.n_features))
+        for i in range(self.n_states):
             feature_matrix[i, :] = self.get_state_feature_vector_full(i)
         return feature_matrix
-
-    def get_state_feature_matrix(self):
-        """
-        Returns
-        -------
-        new_feature_matrix : ndarray
-            representing the feature matrix restricted to reward features (for our example same as whole matrix)
-        """
-        index_of_reward_features = range(0, self.n_features_reward)
-        new_feature_matrix = self.feature_matrix_full[:, index_of_reward_features]
-        return new_feature_matrix
 
     def get_nxn_neighborhood(self, neighborhood: int):
         """
@@ -339,7 +338,14 @@ class Environment:
         return only_outer_neighborhood
 
     def draw(
-        self, V, pi, reward, show: bool = False, strname: str = "", fignum: int = 0, store: bool = False
+        self,
+        V,
+        pi,
+        reward,
+        show: bool = False,
+        strname: str = "",
+        fignum: int = 0,
+        store: bool = False,
     ):
         """
         draws a given policy and reward in the gridworld
@@ -364,32 +370,31 @@ class Environment:
 
         states = self.n_states
 
-        reshaped_reward = copy.deepcopy(
-            reward.reshape((self.grid_size_full, self.grid_size_full))
-        )
+        reshaped_reward = copy.deepcopy(reward.reshape((self.grid_x, self.grid_y)))
         reshaped_reward = np.flip(reshaped_reward, 0)
         plt.pcolor(reshaped_reward)
         plt.colorbar()
         plt.title(strname + ": reward function")
+        if show:
+            plt.show()
         if store:
             plt.savefig(f"plots\{strname}_reward.jpg", format="jpg")
-        
-        f += 1
+
         if V is not None:
+
+            x = np.linspace(0, self.grid_y - 1, self.grid_y) + 0.5
+            y = np.linspace(self.grid_x - 1, 0, self.grid_x) + 0.5
+            X, Y = np.meshgrid(x, y)
+            zeros = np.zeros((self.grid_x, self.grid_y))
+            f += 1
             plt.figure(f)
-            V = self.get_V_for_plotting(V)
-            reshaped_Value = copy.deepcopy(
-                V.reshape((self.grid_size_full, self.grid_size_full))
-            )
+            V_plot = V[0, :]
+            reshaped_Value = copy.deepcopy(V_plot.reshape((self.grid_x, self.grid_y)))
             reshaped_Value = np.flip(reshaped_Value, 0)
             plt.pcolor(reshaped_Value)
             plt.colorbar()
-            x = np.linspace(0, self.grid_size_full - 1, self.grid_size_full) + 0.5
-            y = np.linspace(self.grid_size_full - 1, 0, self.grid_size_full) + 0.5
-            X, Y = np.meshgrid(x, y)
-            zeros = np.zeros((self.grid_size_full, self.grid_size_full))
             if pi is not None:
-                current_states = [0]
+                current_states = [self.init_state]
                 visited = []
                 for t in range(pi.shape[0]):
                     visited += current_states
@@ -399,7 +404,7 @@ class Environment:
                             if np.max(pi[t, s, :]) > 0:
                                 pi_[s] = 0.45 * pi[t, s, a] / np.max(pi[t, s, :])
 
-                        pi_ = pi_.reshape(self.grid_size_full, self.grid_size_full)
+                        pi_ = pi_.reshape(self.grid_x, self.grid_y)
                         if a == 2:
                             plt.quiver(X, Y, zeros, -pi_, scale=1, units="xy")
                         elif a == 1:
@@ -420,54 +425,21 @@ class Environment:
                     )
 
             plt.title(strname + ": optimal values and policy")
+            if show:
+                plt.show()
             if store:
                 plt.savefig(f"plots\{strname}_policy.jpg", format="jpg")
-        if show:
-            plt.show()
 
-    def get_V_for_plotting(self, V):
-        """
-        Extracts necessary values of the time dependent value function for plotting
-
-        Parameters
-        ----------
-        V : ndarray
-            time dependent value function
-
-        Returns
-        -------
-        ndarray of one dimension less containing some of the values from the value function
-        """
-        result = np.zeros(self.n_states)
-
-        current_states = [0]
-        visited = []
-        for t in range(V.shape[0]):
-            visited += current_states
-            for s in current_states:
-                result[s] = V[t, s]
-            current_states = list(
-                set(
-                    x
-                    for n in current_states
-                    for x in self.get_next_states(
-                        n, self.get_possible_actions_within_grid(n)
-                    )
-                    if x not in visited
-                )
-            )
-        return result
+            plt.close()
 
 
 if __name__ == "__main__":
 
-    config_env2 = {
-        "theta_e": [1.0, -1.0],
-        "theta_v": [[0.0, 0.0], [0.0, 0.0]],
+    config_env = {
+        "theta_e": [1.0, 1.0, -2.0],
         "gamma": 1.0,
-        "object_rewards": [0.5, 0.25, 1.75],
     }
 
-    env = Environment(config_env2)
+    env = Environment(config_env)
 
     env.draw(None, pi=None, reward=env.reward, show=True, strname="test")

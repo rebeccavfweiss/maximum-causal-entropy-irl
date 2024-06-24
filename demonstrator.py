@@ -1,6 +1,7 @@
 import MDPSolver
 from environment import Environment
 import copy
+import numpy as np
 
 
 class Demonstrator:
@@ -15,47 +16,83 @@ class Demonstrator:
         name of the demonstrator
     T : int
         finite horizon value for the MDP solver (default = 10)
-
     """
 
-    def __init__(self, env: Environment, demonstrator_name: str, T: int = 10):
+    def __init__(self, env: Environment, demonstrator_name: str, T: int = 45):
         self.V = None
         self.pi = None
         self.reward = None
         self.env = env
         self.demonstrator_name = demonstrator_name
-        self.solver = MDPSolver.MDPSolverExpectation(T)
-        self.mu_demonstrator = self.get_mu_usingRewardFeatures(
-            self.env, self.env.reward
-        )
+        self.T = T
+        self.solver = MDPSolver.MDPSolverExpectation(T, compute_variance=True)
+        self.mu_demonstrator = self.get_mu_usingRewardFeatures()
 
-    def get_mu_usingRewardFeatures(self, env: Environment, reward):
+    def get_mu_usingRewardFeatures(self):
         """
-        computes feature expectation and variance terms for the demonstrator using value iteration and computing the value function based on it
-
-        Parameters
-        ----------
-        env : environment.Environment
-            the environment representing the setting of the problem
-        reward : ndarray
-            reward for each state
+        computes feature expectation and variance terms for the demonstrator using a predefined policy and computing the value function based on it
 
         Returns
         -------
-        feature expectation and variance arrays restricted to the reward features
+        feature expectation and variance arrays
         """
-        _, V, _, pi_s = self.solver.valueIteration(env, dict(reward=reward))
-        self.V = V
+
+        pi_s = np.zeros((self.T, self.env.n_states, self.env.n_actions))
+
+        # define the demonstrator's behavior in a specific way
+        for t in range(pi_s.shape[0]):
+            pi_s[t, self.env.point_to_int(4, 0), self.env.actions["up"]] = 0.5
+            pi_s[t, self.env.point_to_int(4, 0), self.env.actions["down"]] = 0.5
+
+            pi_s[t, self.env.point_to_int(3, 0), self.env.actions["up"]] = 1.0
+            pi_s[t, self.env.point_to_int(2, 0), self.env.actions["up"]] = 1.0
+            pi_s[t, self.env.point_to_int(1, 0), self.env.actions["up"]] = 1.0
+
+            pi_s[t, self.env.point_to_int(5, 0), self.env.actions["down"]] = 1.0
+            pi_s[t, self.env.point_to_int(6, 0), self.env.actions["down"]] = 1.0
+            pi_s[t, self.env.point_to_int(7, 0), self.env.actions["down"]] = 1.0
+
+        self.V = self.compute_value_function(pi_s)
         self.pi = pi_s
 
-        _, mu, nu = self.solver.computeFeatureSVF_bellmann_averaged(env, pi_s)
+        _, mu, nu = self.solver.computeFeatureSVF_bellmann_averaged(self.env, pi_s)
 
         return (
-            mu[: env.n_features_reward],
-            nu[: env.n_features_reward, : env.n_features_reward],
+            mu,
+            nu,
         )
 
-    def draw(self, show:bool=False, store:bool=False, fignum:int=0):
+    def compute_value_function(self, pi):
+        """
+        Computes the state-dependent value function based on the given policy
+
+        Parameters
+        ----------
+        pi : ndarray
+            policy to use
+
+        Returns
+        -------
+        ndarray
+            matrix containing the time-dependent value function
+        """
+        V = np.zeros((self.T + 1, self.env.n_states))
+
+        for t in range(self.T - 1, -1, -1):
+            for s in range(self.env.n_states):
+                V[t, s] = sum(
+                    pi[t, s, a]
+                    * sum(
+                        self.env.T[s, s_prime, a]
+                        * (self.env.reward[s] + self.env.gamma * V[t + 1, s_prime])
+                        for s_prime in range(self.env.n_states)
+                    )
+                    for a in range(self.env.n_actions)
+                )
+
+        return V
+
+    def draw(self, show: bool = False, store: bool = False, fignum: int = 0):
         """
         draws the policy of the demonstrator as long as it has been computed before, else a warning is thrown
 
@@ -70,4 +107,6 @@ class Demonstrator:
         """
 
         self.reward = copy.deepcopy(self.env.reward)
-        self.env.draw(self.V, self.pi, self.reward, show, self.demonstrator_name, fignum, store)
+        self.env.draw(
+            self.V, self.pi, self.reward, show, self.demonstrator_name, fignum, store
+        )
