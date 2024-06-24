@@ -22,7 +22,7 @@ The feature mappings are such that:
 ### Different Policies, different variances
 In this setting, multiple policies can achieve the same feature expectations but have different feature variances. We consider a subset of possible paths depicted below.
 
-![Three possible paths in the grid world.](plots/paths.png)
+![Three possible paths in the grid world.](plots/paths.pdf)
 
 Using $\gamma = 1$ we can see that the following policies have the same feature expectation count but different variances:
 
@@ -33,7 +33,7 @@ Using $\gamma = 1$ we can see that the following policies have the same feature 
 
 The demonstrator uses the real reward parameters $[1,1,-2]$ and policy $\pi_1$.
 
-![Reward function of the demonstrator](plots/Demonstrator_reward.jpg)
+![Reward function of the demonstrator](plots/Demonstrator_reward.pdf)
 
 ## Evaluation
 
