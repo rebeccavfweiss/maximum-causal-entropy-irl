@@ -6,28 +6,32 @@ Within this approach we extend the classic idea of feature expectation matching 
 
 ## Problem \& Environment
 
-For our experiment, we use a grid world scenario. The agent starts in a specified starting state on the grid and must move towards a specified end state in the minimal number of steps while simultaneously picking up as many items, placed around the grid, as possible. These items have different values, making some more important to collect than others.
+For our experiment, we use a grid world scenario. The agent starts in a specified starting state on the grid and must move towards a specified end state in the minimal number of steps while simultaneously picking up as many items, placed around the grid, as possible. These items have different feature vectors.
 
 Below we display the specific grid configuration for this experiment.
 
 ![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/grid.png)
 
-The values for the objects are $v(\Diamond) = 0.5$, $v(\triangle) = 0.25$, $v(\square) = 1.75$.
+The feature mappings are such that:
+- empty states: $[0,0,1]$
+- state with $\Diamond = [1,1,1]$
+- state with $\triangle = [2,0,1]$
+- state with $\square = [0,2,1]$.
+- final states: $[1,1,1]$ (to ensure that the agent actually goes there)
 
 ### Different Policies, different variances
 In this setting, multiple policies can achieve the same feature expectations but have different feature variances. We consider a subset of possible paths depicted below.
 
-![Three possible paths in the grid world. The green states besides the starting state depict that both the yellow and the cyan path use this state.](plots/paths.png)
+![Three possible paths in the grid world.](plots/paths.png)
 
 Using $\gamma = 1$ we can see that the following policies have the same feature expectation count but different variances:
 
-- $\pi_1$: follows deterministically the yellow path
-- $\pi_2$: follows the cyan or the violet path with equal probability
-- $\pi_3$: follows either of the three paths with equal probability
+- $\pi_1$: follows the violet and the blue path with equal probability
+- $\pi_2$: follows either of the three paths with equal probability
 
-### Feature Mappings and Demonstrator
+### Demonstrator
 
-The feature mapping and the true reward parameters ($[2, 1]$) are defined such that the demonstrator should prefer the yellow path.
+The demonstrator uses the real reward parameters $[1,1,-2]$ and policy $\pi_1$.
 
 ![Reward function of the demonstrator](plots/Demonstrator_reward.jpg)
 
@@ -35,11 +39,11 @@ The feature mapping and the true reward parameters ($[2, 1]$) are defined such t
 
 To compare the performance of feature variance matching with the original feature expectation matching we compare the reward values under the true reward parameters and observe:
 
-- Demonstrator's reward: $-2.0$
-- Agent with expectation matchin : $-2.000586$
-- Agent with additional variance matching: $-2.0$
+- Demonstrator's reward: $-6.0$
+- Agent with expectation matching : $-6.406377$
+- Agent with additional variance matching: $-6.000001$
 
-Thus, the new algorithm is performing slightly better than the original one.
+Thus, the new algorithm is performing slightly better than the original one. It also converges faster.
 
 
 
