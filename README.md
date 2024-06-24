@@ -10,7 +10,7 @@ For our experiment, we use a grid world scenario. The agent starts in a specifie
 
 Below we display the specific grid configuration for this experiment.
 
-![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/grid.pdf)
+![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/grid.jpg)
 
 The feature mappings are such that:
 - empty states: $[0,0,1]$
@@ -22,7 +22,7 @@ The feature mappings are such that:
 ### Different Policies, different variances
 In this setting, multiple policies can achieve the same feature expectations but have different feature variances. We consider a subset of possible paths depicted below.
 
-![Three possible paths in the grid world.](plots/paths.pdf)
+![Three possible paths in the grid world.](plots/paths.jpg)
 
 Using $\gamma = 1$ we can see that the following policies have the same feature expectation count but different variances:
 
