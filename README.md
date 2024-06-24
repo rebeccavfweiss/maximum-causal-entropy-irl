@@ -10,7 +10,7 @@ For our experiment, we use a grid world scenario. The agent starts in a specifie
 
 Below we display the specific grid configuration for this experiment.
 
-![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/grid.png)
+![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/grid.pdf)
 
 The feature mappings are such that:
 - empty states: $[0,0,1]$
@@ -33,7 +33,7 @@ Using $\gamma = 1$ we can see that the following policies have the same feature 
 
 The demonstrator uses the real reward parameters $[1,1,-2]$ and policy $\pi_1$.
 
-![Reward function of the demonstrator](plots/Demonstrator_reward.pdf)
+![Reward function of the demonstrator](plots/Demonstrator_reward.jpg)
 
 ## Evaluation
 
