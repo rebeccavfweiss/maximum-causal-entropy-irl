@@ -40,10 +40,10 @@ The demonstrator uses the real reward parameters $[1,1,-2]$ and policy $\pi_1$.
 To compare the performance of feature variance matching with the original feature expectation matching we compare the reward values under the true reward parameters and observe:
 
 - Demonstrator's reward: $-6.0$
-- Agent with expectation matching : $-6.406377$
-- Agent with additional variance matching: $-6.000001$
+- Agent with expectation matching : $-6.02598$
+- Agent with additional variance matching: $-5.99979$
 
-Thus, the new algorithm is performing slightly better than the original one. It also converges faster.
+Thus, the new algorithm is performing slightly better than the original one. Note, that we ran the experiment with a finite horizon $T=20$.
 
 
 
