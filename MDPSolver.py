@@ -232,28 +232,14 @@ class MDPSolver(ABC):
         # Bellman Equation
         SV[0, :] = env.InitD
         for t in range(1, self.T):
-            SV[t, :] = env.gamma * T_pi_sparse[t].dot(SV[t - 1, :])
+            SV[t, :] = env.gamma * T_pi_sparse[t-1].dot(SV[t - 1, :])
 
         feature_expectation = sum(
             env.get_state_feature_matrix().transpose().dot(SV[t]) for t in range(self.T)
         )
-        #feature_variance = np.matmul(
-        #    feature_expectation.reshape(len(feature_expectation), 1),
-        #    feature_expectation.reshape(len(feature_expectation), 1).transpose(),
-        #)
-
-       
-        #feature_counts = [ env.get_state_feature_matrix()*SV[t][:,np.newaxis] for t in range(self.T)]
-        
-        #feature_variance = sum( np.matmul(feature_counts[i].transpose(), feature_counts[j]) for i in range(self.T) for j in range(self.T))
-        #feature_variance = sum( np.matmul(feature_counts[i].transpose(), env.get_state_feature_matrix()) for i in range(self.T))
 
         feature_products = [[np.matmul(env.get_state_feature_vector_full(i).reshape(len(env.get_state_feature_vector_full(i)),1), env.get_state_feature_vector_full(j).reshape(1,len(env.get_state_feature_vector_full(j)))) for j in range(env.n_states)] for i in range(env.n_states)]
-
-        #print([SV[t] for t in range(self.T)])
-        #feature_variance = np.zeros((env.n_features, env.n_features))
-        
-
+      
         feature_variance = np.zeros((env.n_features, env.n_features))
 
         if self.compute_variance:
