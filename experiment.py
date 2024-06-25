@@ -19,7 +19,7 @@ def create_env():
 def create_config_learner():
     config_default_learner = {"tol": 0.0005,
                                 "miniter": 10,
-                                "maxiter": 10000
+                                "maxiter": 30000
                             }
 
     return config_default_learner
@@ -28,8 +28,8 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    verbose = False
-    T = 6
+    verbose = True
+    T = 20
 
     # create the environment
     env = create_env()
