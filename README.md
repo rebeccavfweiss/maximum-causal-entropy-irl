@@ -17,7 +17,7 @@ The feature mappings are such that:
 - state with $\Diamond = [1,1,1]$
 - state with $\triangle = [2,0,1]$
 - state with $\square = [0,2,1]$.
-- final states: $[1,1,1]$ (to ensure that the agent actually goes there)
+- target states: $[1,1,1]$ (to ensure that the agent actually goes there)
 
 ### Different Policies, different variances
 In this setting, multiple policies can achieve the same feature expectations but have different feature variances. We consider a subset of possible paths depicted below.
