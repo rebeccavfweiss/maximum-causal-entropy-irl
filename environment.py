@@ -391,7 +391,7 @@ class Environment:
             V_plot = V[0, :]
             reshaped_Value = copy.deepcopy(V_plot.reshape((self.grid_x, self.grid_y)))
             reshaped_Value = np.flip(reshaped_Value, 0)
-            plt.pcolor(reshaped_Value)
+            plt.pcolor(reshaped_Value, vmin=-25)
             plt.colorbar()
             if pi is not None:
                 current_states = [self.init_state]

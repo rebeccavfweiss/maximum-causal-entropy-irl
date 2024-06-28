@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    verbose = True
+    verbose = False
     T = 20
 
     # create the environment
@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     # create agent that uses only expectation matching
     agent_expectation = agent.Agent(env, demo.mu_demonstrator, config_default_learner, agent_name="Agent Expectation", solver=MDPSolver.MDPSolverExpectation(T))
-    t_expectation = agent_expectation.batch_MCE(verbose=verbose)
+    iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
     agent_expectation.compute_and_draw(show, store, 2)
     reward_expectation = np.dot(env.reward, agent_expectation.solver.computeFeatureSVF_bellmann(env, agent_expectation.pi)[0])
 
@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     # create agent that also matches variances
     agent_variance = agent.Agent(env, demo.mu_demonstrator, config_default_learner, agent_name="Agent Variance", solver=MDPSolver.MDPSolverVariance(T))
-    t_variance = agent_variance.batch_MCE(verbose=verbose)
+    iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
     agent_variance.compute_and_draw(show, store, 4)
     reward_variance = np.dot(env.reward, agent_variance.solver.computeFeatureSVF_bellmann(env, agent_variance.pi)[0])
 
@@ -77,7 +77,8 @@ if __name__ == "__main__":
     print("reward: ", reward_expectation, " (diff. to demonstrator: ", np.abs(reward_demonstrator-reward_expectation), ")")
     print("theta_e: ", agent_expectation.theta_e)
     print("policy difference:", sum(np.linalg.norm(demo.pi[i,:,:] - agent_expectation.pi[i,:,:], ord = "fro") for i in range(demo.pi.shape[0])))
-    print("iterations used: ", t_expectation)
+    print("iterations used: ", iter_expectation)
+    print("time used (total/ avg. per iteration): ", sum(time_expectation), "/", np.mean(time_expectation))
     print("")
 
     print("----- Expectation + Variance -----")
@@ -85,6 +86,7 @@ if __name__ == "__main__":
     print("theta_e: ", agent_variance.theta_e)
     print("theta_v: ", agent_variance.theta_v)
     print("policy difference:", sum(np.linalg.norm(demo.pi[i,:,:] - agent_variance.pi[i,:,:], ord ="fro") for i in range(demo.pi.shape[0])))
-    print("iterations used: ", t_variance)
+    print("iterations used: ", iter_variance)
+    print("time used (total/ avg. per iteration): ", sum(time_variance), "/", np.mean(time_variance))
 
     

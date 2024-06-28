@@ -2,6 +2,7 @@ import MDPSolver
 import numpy as np
 import copy
 from environment import Environment
+from time import time
 
 _largenum = 1000000
 
@@ -144,6 +145,8 @@ class Agent:
         -------
         int
             number of iterations used until convergence
+        list[float]
+            time used per iteration
         """
 
         calc_theta_v = isinstance(self.solver, MDPSolver.MDPSolverVariance)
@@ -151,6 +154,8 @@ class Agent:
         theta_e_pos = np.zeros(self.env.n_features)
         theta_e_neg = np.zeros(self.env.n_features)
         self.theta_e = np.zeros(self.env.n_features)
+
+        runtime = []
 
         if calc_theta_v:
             theta_v_pos = np.zeros((self.env.n_features, self.env.n_features))
@@ -166,6 +171,9 @@ class Agent:
         t = 1
         while True:
             # set learning rate
+
+            start = time()
+
             eta = gradientconstant / np.sqrt(t)
 
             if verbose:
@@ -232,6 +240,10 @@ class Agent:
             if calc_theta_v:
                 diff_L2_norm_theta_v = np.linalg.norm(theta_v_old - self.theta_v)
 
+            end = time()
+
+            runtime.append(end-start)
+
             if verbose:
                 print("...diff_L2_norm_theta_e=", diff_L2_norm_theta_e)
                 if calc_theta_v:
@@ -256,4 +268,4 @@ class Agent:
         if verbose:
             print(f"Terminated in {t} iterations")
 
-        return t
+        return t, runtime
