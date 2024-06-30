@@ -18,7 +18,7 @@ def create_env():
 
 def create_config_learner():
     config_default_learner = {"tol": 0.0005,
-                                "miniter": 10,
+                                "miniter": 5,
                                 "maxiter": 30000
                             }
 
@@ -42,6 +42,7 @@ if __name__ == "__main__":
     demo.draw(show, store, 0)
     print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
     print("Demonstrator's variance: ", demo.mu_demonstrator[1])
+
 
     if verbose:
         print("Demonstrator done")
