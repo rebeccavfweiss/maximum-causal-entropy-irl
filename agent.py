@@ -80,8 +80,7 @@ class Agent:
             self.env,
             self.pi,
             dict(
-                reward=self.env.reward,
-                variance=np.zeros((self.env.n_features, self.env.n_features)),
+                reward=self.env.reward
             ),
         )  # compute the value function w.r.t to true reward parameters
 
