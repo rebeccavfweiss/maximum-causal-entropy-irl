@@ -43,7 +43,6 @@ if __name__ == "__main__":
     print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
     print("Demonstrator's variance: ", demo.mu_demonstrator[1])
 
-
     if verbose:
         print("Demonstrator done")
     
