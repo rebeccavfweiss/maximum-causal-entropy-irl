@@ -1,6 +1,6 @@
 # Maximum Causal Entropy IRL
 
-In this project, an extension of the classic Maximum Causal Entropy Inverse Reinforcement Learning algorithm was implemented within the process of a Bachelor thesis. The theoretical basis is given by Ziebart et. al. [^1]. The code for the original version of the algorithm was provided by one of the authors of [^2] in which this code was developed. This basis was modified to fit the specific experiment and also include the new approach of this work.
+In this project, an extension of the classic Maximum Causal Entropy Inverse Reinforcement Learning algorithm was implemented within the process of a Bachelor thesis. The theoretical basis is given by Ziebart et. al. [^1]. The code for Maximum Causal Entropy IRL with feature matching only was provided by one of the authors of [^2]. This code was modified and extended to fit the specific experiment and also include the new approach of this work.
 
 Within this approach we extend the classic idea of feature expectation matching to feature variance matching as there can be multiple policies that match the feature expectation of the demonstrator that might not be equally good. The variance should be another measure to model the behavior of the demonstrator even more closely. This idea can also be generalized to higher order moments.
 
