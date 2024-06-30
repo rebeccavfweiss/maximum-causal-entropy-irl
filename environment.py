@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import copy
 from scipy import sparse
-import matplotlib.pyplot as plt
 from itertools import product
 
 np.set_printoptions(suppress=True)
@@ -46,6 +45,7 @@ class Environment:
         self.n_features = self.feature_matrix.shape[1]
 
         self.reward = self.get_reward_for_given_theta(self.theta_e)
+        self.variance = self.get_variance_for_given_theta(np.zeros((self.n_features, self.n_features)))
         self.T = self.get_transition_matrix()
         self.T_sparse_list = self.get_transition_sparse_list()
 
@@ -391,12 +391,15 @@ class Environment:
             V_plot = V[0, :]
             reshaped_Value = copy.deepcopy(V_plot.reshape((self.grid_x, self.grid_y)))
             reshaped_Value = np.flip(reshaped_Value, 0)
-            plt.pcolor(reshaped_Value, vmin=-25)
+            plt.pcolor(reshaped_Value, vmin=-10)
             plt.colorbar()
             if pi is not None:
                 current_states = [self.init_state]
                 visited = []
                 for t in range(pi.shape[0]):
+                    for state in current_states:
+                        coord = self.int_to_point(state)
+                        plt.text(coord[1], coord[0], t,  color='black')
                     visited += current_states
                     for a in range(self.n_actions):
                         pi_ = np.zeros(states)
