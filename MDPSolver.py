@@ -293,11 +293,45 @@ class MDPSolver(ABC):
 
         return np.mean(V_list, axis=0)
 
-    @abstractmethod
     def computeValueFunction_bellmann(
         self, env: Environment, policy, values: dict[str:any]
     ):
-        pass
+        """
+        computes value function using bellmann equations
+
+        Parameters
+        ----------
+        env : environment.Environment
+            the environment representing the setting of the problem
+        policy : ndarray
+            policy to use (can be deterministic or stochastic)
+        values : dict[str:any]
+            dictionary with the feature expecation and variance term needed for bellmann
+
+
+        Returns
+        -------
+        V : ndarray
+            value function
+        """
+        # check if policy is deterministic or stochastic
+        if len(policy.shape) == 2:
+            changed_policy = self.convert_det_to_stochastic_policy(env, policy)
+        else:
+            changed_policy = policy
+
+        T_pi = self.get_T_pi(env, changed_policy)
+
+        T_pi_sparse = [sparse.csr_matrix(T_pi[t]) for t in range(self.T)]
+
+        V = np.zeros((self.T, env.n_states))
+
+        # Bellman Equation
+        V[self.T - 1, :] = values["reward"]
+        for t in range(self.T - 2, -1, -1):
+            V[t, :] = values["reward"] + env.gamma * T_pi_sparse[t].dot(V[t + 1, :])
+
+        return V
 
 
 class MDPSolverExpectation(MDPSolver):
@@ -372,45 +406,7 @@ class MDPSolverExpectation(MDPSolver):
 
         return Q, V, pi_s
 
-    def computeValueFunction_bellmann(
-        self, env: Environment, policy, values: dict[str:any]
-    ):
-        """
-        computes value function using bellmann equations
-
-        Parameters
-        ----------
-        env : environment.Environment
-            the environment representing the setting of the problem
-        policy : ndarray
-            policy to use (can be deterministic or stochastic)
-        values : dict[str:any]
-            dictionary with the feature expecation and variance term needed for bellmann
-
-
-        Returns
-        -------
-        V : ndarray
-            value function
-        """
-        # check if policy is deterministic or stochastic
-        if len(policy.shape) == 2:
-            changed_policy = self.convert_det_to_stochastic_policy(env, policy)
-        else:
-            changed_policy = policy
-
-        T_pi = self.get_T_pi(env, changed_policy)
-
-        T_pi_sparse = [sparse.csr_matrix(T_pi[t]) for t in range(self.T)]
-
-        V = np.zeros((self.T, env.n_states))
-
-        # Bellman Equation
-        V[self.T - 1, :] = values["reward"]
-        for t in range(self.T - 2, -1, -1):
-            V[t, :] = values["reward"] + env.gamma * T_pi_sparse[t].dot(V[t + 1, :])
-
-        return V
+    
 
 
 class MDPSolverVariance(MDPSolver):
@@ -486,48 +482,3 @@ class MDPSolverVariance(MDPSolver):
             pi_s[:,s,:] = 0.0
 
         return Q, V, pi_s
-
-    def computeValueFunction_bellmann(
-        self, env: Environment, policy, values: dict[str:any]
-    ):
-        """
-        computes value function using bellmann equations
-
-        Parameters
-        ----------
-        env : environment.Environment
-            the environment representing the setting of the problem
-        policy : ndarray
-            policy to use (can be deterministic or stochastic)
-        values : dict[str:any]
-            dictionary with the feature expecation and variance term needed for bellmann
-
-        Returns
-        -------
-        V : ndarray
-            value function
-        """
-
-        # check if policy is deterministic or stochastic
-        if len(policy.shape) == 2:
-            changed_policy = self.convert_det_to_stochastic_policy(env, policy)
-        else:
-            changed_policy = policy
-
-        T_pi = self.get_T_pi(env, changed_policy)
-
-        # Converting this T to a sparse matrix
-        T_pi_sparse = [sparse.csr_matrix(T_pi[t]) for t in range(self.T)]
-
-        V = np.zeros((self.T, env.n_states))
-
-        # Bellman Equation
-        V[self.T - 1, :] = values["reward"] #+ env.gamma**(self.T -1) * values["variance"]
-        for t in range(self.T - 2, -1, -1):
-            V[t, :] = (
-                values["reward"]
-                #+ env.gamma**t * values["variance"]
-                + env.gamma * T_pi_sparse[t].dot(V[t + 1, :])
-            )
-
-        return V
