@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import copy
 from scipy import sparse
 from itertools import product
+import os
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -35,7 +36,7 @@ class Environment:
             env_args["theta_e"]
         )  # (=3) two for the objects, and whether terminal state
 
-        self.n_states = self.grid_x * self.grid_y
+        self.n_states = self.grid_x * self.grid_y + 1
 
         self.terminal_states = self.compute_terminal_states()
 
@@ -108,12 +109,16 @@ class Environment:
 
         for s in range(self.n_states):
             if s in self.terminal_states:
+                P[s, self.n_states - 1, :] = 1.0
                 continue
+
+            if s == self.n_states - 1:
+                P[s, s, :] = 1.0
 
             curr_state = s
             possible_actions = self.get_possible_actions_within_grid(s)
             next_states = self.get_next_states(curr_state, possible_actions)
-            for a in range(self.n_actions - 1):
+            for a in range(self.n_actions):
                 if a in possible_actions:
                     n_s = int(next_states[np.where(possible_actions == a)][0])
                     P[s, n_s, a] = 1.0
@@ -140,17 +145,7 @@ class Environment:
         if state in self.terminal_states:
             return np.array(possible_actions, dtype=int)
 
-        state_x, state_y = state // self.grid_y, state % self.grid_y
-        if state_x > 0:
-            possible_actions.append(self.actions["up"])
-        if state_x < self.grid_x - 1:
-            possible_actions.append(self.actions["down"])
-        if state_y > 0:
-            possible_actions.append(self.actions["left"])
-        if state_y < self.grid_y - 1:
-            possible_actions.append(self.actions["right"])
-
-        possible_actions = np.array(possible_actions, dtype=int)
+        possible_actions = np.array(list(range(4)), dtype=int)
         return possible_actions
 
     def get_next_states(self, state: int, possible_actions):
@@ -171,16 +166,28 @@ class Environment:
         """
         next_state = []
 
+        # {"up": 0, "left": 1, "down": 2, "right": 3}
         state_x, state_y = state // self.grid_y, state % self.grid_y
         for a in possible_actions:
+            if state == self.n_states - 1:
+                next_state.append(state)
+                continue
+
+            n_state_x = state_x
+            n_state_y = state_y
             if a == 0:
-                next_state.append((state_x - 1) * self.grid_y + state_y)
+                if state_x > 0:
+                    n_state_x = n_state_x - 1
             if a == 1:
-                next_state.append(state_x * self.grid_y + state_y - 1)
+                if state_y > 0:
+                    n_state_y = n_state_y - 1
             if a == 2:
-                next_state.append((state_x + 1) * self.grid_y + state_y)
+                if state_x < self.grid_x - 1:
+                    n_state_x = n_state_x + 1
             if a == 3:
-                next_state.append(state_x * self.grid_y + state_y + 1)
+                if state_y < self.grid_y - 1:
+                    n_state_y = n_state_y + 1
+            next_state.append(n_state_x * self.grid_y + n_state_y)
 
         next_state = np.array(next_state, dtype=int)
         return next_state
@@ -277,6 +284,9 @@ class Environment:
         """
         feature_vector = np.zeros(self.n_features)
 
+        if state == self.n_states - 1:
+            return feature_vector
+
         # get feature for objects (is present on this state)
         if self.state_object_array[state, 0] != 0:
             feature_vector[0] = 2
@@ -367,7 +377,11 @@ class Environment:
         f = fignum
         plt.figure(f)
 
-        states = self.n_states
+        states = self.n_states - 1
+
+        reward = reward[:-1]
+        V = V[:, :-1]
+        pi = pi[:-1]
 
         reshaped_reward = copy.deepcopy(reward.reshape((self.grid_x, self.grid_y)))
         reshaped_reward = np.flip(reshaped_reward, 0)
@@ -398,7 +412,7 @@ class Environment:
                 for t in range(pi.shape[0]):
                     for state in current_states:
                         coord = self.int_to_point(state)
-                        plt.text(coord[1], coord[0], t,  color='black')
+                        plt.text(coord[1], coord[0], t, color="black")
                     visited += current_states
                     for a in range(self.n_actions):
                         pi_ = np.zeros(states)
@@ -430,7 +444,9 @@ class Environment:
             if show:
                 plt.show()
             if store:
-                plt.savefig(f"plots\{strname}_policy.jpg", format="jpg")
+                plt.savefig(
+                    os.path.join("plots", f"{strname}_policy.jpg"), format="jpg"
+                )
 
             plt.close()
 
