@@ -109,11 +109,11 @@ class Environment:
 
         for s in range(self.n_states):
             if s in self.terminal_states:
-                P[s, self.n_states - 1, :] = 1.0
+                P[s, self.n_states-1, :] = 1.0
                 continue
 
             if s == self.n_states - 1:
-                P[s, s, :] = 1.0
+                P[s,s,:] = 1.0
 
             curr_state = s
             possible_actions = self.get_possible_actions_within_grid(s)
@@ -380,8 +380,9 @@ class Environment:
         states = self.n_states - 1
 
         reward = reward[:-1]
-        V = V[:, :-1]
+        V = V[:,:-1]
         pi = pi[:-1]
+
 
         reshaped_reward = copy.deepcopy(reward.reshape((self.grid_x, self.grid_y)))
         reshaped_reward = np.flip(reshaped_reward, 0)
@@ -412,7 +413,7 @@ class Environment:
                 for t in range(pi.shape[0]):
                     for state in current_states:
                         coord = self.int_to_point(state)
-                        plt.text(coord[1], coord[0], t, color="black")
+                        plt.text(coord[1], coord[0], t,  color='black')
                     visited += current_states
                     for a in range(self.n_actions):
                         pi_ = np.zeros(states)
@@ -444,9 +445,7 @@ class Environment:
             if show:
                 plt.show()
             if store:
-                plt.savefig(
-                    os.path.join("plots", f"{strname}_policy.jpg"), format="jpg"
-                )
+                plt.savefig(os.path.join("plots", f"{strname}_policy.jpg"), format="jpg")
 
             plt.close()
 

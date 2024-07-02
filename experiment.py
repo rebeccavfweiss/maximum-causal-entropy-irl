@@ -25,7 +25,7 @@ if __name__ == "__main__":
     show = False
     store = True
     verbose = False
-    T = 10
+    T = 20
 
     # create the environment
     env = create_env()
