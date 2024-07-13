@@ -46,8 +46,9 @@ To compare the performance of feature variance matching with the original featur
 
 Thus, both algorithms achieve the best possible reward up to rounding errors. However, comparing the policies only the agent using variance matching is able to learn the desired behavior. Note, that we ran the experiment with a finite horizon $T=20$.
 
-![Policy of the agent using only feature expectation matching](plots/Agent Expectation_policy.jpg)
-![Policy of the agent using both feature expectation and variance matching](plots/Agent Variance_policy.jpg)
+![Policy of the agent using only feature expectation matching](plots/Agent%20Expectation_policy.jpg)
+
+![Policy of the agent using both feature expectation and variance matching](plots/Agent%20Variance_policy.jpg)
 
 
 
@@ -56,3 +57,5 @@ Thus, both algorithms achieve the best possible reward up to rounding errors. Ho
 [^1]: Brian D. Ziebart. Modeling purposeful adaptive behavior with the principle of maximum causal entropy. PhD thesis, USA, 2010. AAI3438449 [Link to the source](https://www.cs.cmu.edu/~bziebart/publications/thesis-bziebart.pdf). 
 
 [^2]: Sebastian Tschiatschek, Ahana Ghosh, Luis Haug, Rati Devidze, Adish Singla. Learner-aware Teaching: Inverse Reinforcement Learning with Preferences and Constraints [Link to the source](https://arxiv.org/abs/1906.00429).
+
+[def]: plots/"Agent Expectation_policy.jpg"
