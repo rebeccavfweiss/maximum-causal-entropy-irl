@@ -26,8 +26,9 @@ In this setting, multiple policies can achieve the same feature expectations but
 
 Using $\gamma = 1$ we can see that the following policies have the same feature expectation count but different variances:
 
-- $\pi_1$: follows the violet and the blue path with equal probability
+- $\pi_1$: follows the pink and the blue path with equal probability
 - $\pi_2$: follows either of the three paths with equal probability
+- $\pi_3$: deterministically follows the yellow path
 
 ### Demonstrator
 
@@ -40,10 +41,13 @@ The demonstrator uses the real reward parameters $[1,1,-2]$ and policy $\pi_1$.
 To compare the performance of feature variance matching with the original feature expectation matching we compare the reward values under the true reward parameters and observe:
 
 - Demonstrator's reward: $-6.0$
-- Agent with expectation matching : $-6.02598$
-- Agent with additional variance matching: $-5.99979$
+- Agent with expectation matching : $-6.000003$
+- Agent with additional variance matching: $-6.0$
 
-Thus, the new algorithm is performing slightly better than the original one. Note, that we ran the experiment with a finite horizon $T=20$.
+Thus, both algorithms achieve the best possible reward up to rounding errors. However, comparing the policies only the agent using variance matching is able to learn the desired behavior. Note, that we ran the experiment with a finite horizon $T=20$.
+
+![Policy of the agent using only feature expectation matching](plots/Agent Expectation_policy.jpg)
+![Policy of the agent using both feature expectation and variance matching](plots/Agent Variance_policy.jpg)
 
 
 
