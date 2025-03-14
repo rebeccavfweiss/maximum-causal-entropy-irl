@@ -141,6 +141,8 @@ class MDPSolver(ABC):
         T_pi : ndarray
             transition probability matrix based on the policy (time dependent)
         """
+
+
         T_pi = np.zeros((self.T, env.n_states, env.n_states))
 
         for t in range(self.T):
@@ -237,22 +239,25 @@ class MDPSolver(ABC):
         feature_expectation = sum(
             env.get_state_feature_matrix().transpose().dot(SV[t]) for t in range(self.T)
         )
+        
 
-        feature_products = [[np.matmul(env.get_state_feature_vector_full(i).reshape(len(env.get_state_feature_vector_full(i)),1), env.get_state_feature_vector_full(j).reshape(1,len(env.get_state_feature_vector_full(j)))) for j in range(env.n_states)] for i in range(env.n_states)]
-      
+        feature_matrix = env.get_state_feature_matrix()
+        
+        # Compute feature_products using batch matrix multiplication
+        feature_products = np.einsum('ai,bj->abij', feature_matrix, feature_matrix)
+
         feature_variance = np.zeros((env.n_features, env.n_features))
 
         if self.compute_variance:
+            SV = np.array(SV)  # Convert to NumPy array for faster operations
+
+            # Compute variance using vectorized operations
             for t1 in range(self.T):
                 for t2 in range(self.T):
                     if t1 == t2:
-                        for s in range(env.n_states):
-                            feature_variance += SV[t1][s]*feature_products[s][s]
+                        feature_variance += np.einsum('s,ijs->ij', SV[t1], feature_products.diagonal(axis1=0, axis2=1))
                     else:
-                        for s1 in range(env.n_states):
-                            for s2 in range(env.n_states):                            
-                                feature_variance += SV[t1][s1]*SV[t2][s2]*feature_products[s1][s2]
-           
+                        feature_variance += np.einsum('s,t,stij->ij', SV[t1], SV[t2], feature_products)
 
         return np.sum(SV, axis=0), feature_expectation, feature_variance
 
@@ -314,6 +319,7 @@ class MDPSolver(ABC):
         V : ndarray
             value function
         """
+
         # check if policy is deterministic or stochastic
         if len(policy.shape) == 2:
             changed_policy = self.convert_det_to_stochastic_policy(env, policy)
@@ -369,6 +375,7 @@ class MDPSolverExpectation(MDPSolver):
         pi_s : ndarray
             stochastic policy
         """
+
         V = np.zeros((self.T, env.n_states))
         Q = np.zeros((self.T, env.n_states, env.n_actions))
 
@@ -444,6 +451,7 @@ class MDPSolverVariance(MDPSolver):
         pi_s : ndarray
             stochastic policy
         """
+
         V = np.zeros((self.T, env.n_states))
         Q = np.zeros((self.T, env.n_states, env.n_actions))
 
