@@ -15,7 +15,7 @@ class Demonstrator:
     demonstrator_name : str
         name of the demonstrator
     T : int
-        finite horizon value for the MDP solver (default = 10)
+        finite horizon value for the MDP solver (default = 45)
     """
 
     def __init__(self, env: Environment, demonstrator_name: str, T: int = 45):
