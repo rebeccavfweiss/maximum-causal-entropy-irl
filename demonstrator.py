@@ -28,7 +28,7 @@ class Demonstrator:
         self.solver = MDPSolver.MDPSolverExpectation(T, compute_variance=True)
         self.mu_demonstrator = self.get_mu_usingRewardFeatures()
 
-    def get_mu_usingRewardFeatures(self):
+    def get_mu_using_reward_features(self):
         """
         computes feature expectation and variance terms for the demonstrator using a predefined policy and computing the value function based on it
 
@@ -55,7 +55,7 @@ class Demonstrator:
         self.V = self.compute_value_function(pi_s)
         self.pi = pi_s
 
-        _, mu, nu = self.solver.computeFeatureSVF_bellmann_averaged(self.env, pi_s)
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_s)
 
         return (
             mu,

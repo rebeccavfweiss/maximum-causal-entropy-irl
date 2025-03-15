@@ -26,7 +26,7 @@ class MDPSolver(ABC):
         self.compute_variance = compute_variance
 
     @abstractmethod
-    def soft_valueIteration(env: Environment, values: dict[str:any]):
+    def soft_value_iteration(env: Environment, values: dict[str:any]):
         pass
 
     def softmax_list(self, A, states):
@@ -152,7 +152,7 @@ class MDPSolver(ABC):
 
         return T_pi
 
-    def computeFeatureSVF_bellmann_averaged(
+    def compute_feature_SVF_bellmann_averaged(
         self, env: Environment, policy, num_iter: int = None
     ):
         """
@@ -185,7 +185,7 @@ class MDPSolver(ABC):
         nu_list = []
 
         for _ in range(num_iter):
-            SV, feature_expectation, feature_variance = self.computeFeatureSVF_bellmann(
+            SV, feature_expectation, feature_variance = self.compute_feature_SVF_bellmann(
                 env, policy
             )
             sv_list.append(SV)
@@ -198,7 +198,7 @@ class MDPSolver(ABC):
             np.mean(nu_list, axis=0),
         )
 
-    def computeFeatureSVF_bellmann(self, env: Environment, policy):
+    def compute_feature_SVF_bellmann(self, env: Environment, policy):
         """
         computes feature SVF
 
@@ -261,7 +261,7 @@ class MDPSolver(ABC):
 
         return np.sum(SV, axis=0), feature_expectation, feature_variance
 
-    def computeValueFunction_bellmann_averaged(
+    def compute_value_function_bellmann_averaged(
         self, env: Environment, policy, values: dict[str:any], num_iter: int = None
     ):
         """
@@ -355,7 +355,7 @@ class MDPSolverExpectation(MDPSolver):
     def __init__(self, T: int=45, compute_variance : bool = False):
         super().__init__(T, compute_variance)
 
-    def soft_valueIteration(self, env: Environment, values: dict[str:any]):
+    def soft_value_iteration(self, env: Environment, values: dict[str:any]):
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -431,7 +431,7 @@ class MDPSolverVariance(MDPSolver):
     def __init__(self, T: int=45, compute_variance : bool = True):
         super().__init__(T, compute_variance)
 
-    def soft_valueIteration(self, env: Environment, values: dict[str:any]):
+    def soft_value_iteration(self, env: Environment, values: dict[str:any]):
         """
         computes soft value iteration using feature expectation and variance matching
 
