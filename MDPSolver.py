@@ -49,7 +49,7 @@ class MDPSolver(ABC):
         return Amax + np.log(np.exp(Atemp).sum(axis=1))
 
 
-    def generateEpisode(
+    def generate_episode(
         self, env: Environment, policy, len_episode: int, init_state: int = None
     ):
         """
@@ -294,11 +294,11 @@ class MDPSolver(ABC):
         V_list = []
 
         for _ in range(num_iter):
-            V_list.append(self.computeValueFunction_bellmann(env, policy, values))
+            V_list.append(self.compute_value_function_bellmann(env, policy, values))
 
         return np.mean(V_list, axis=0)
 
-    def computeValueFunction_bellmann(
+    def compute_value_function_bellmann(
         self, env: Environment, policy, values: dict[str:any]
     ):
         """
