@@ -71,12 +71,12 @@ class Agent:
         """
         self.reward = self.get_reward_for_given_thetas()
         self.variance = self.get_variance_for_given_thetas()
-        _, _, pi_agent = self.solver.soft_valueIteration(
+        _, _, pi_agent = self.solver.soft_value_iteration(
             self.env, dict(reward=self.reward, variance=self.variance)
         )
         self.pi = pi_agent
 
-        self.V = self.solver.computeValueFunction_bellmann_averaged(
+        self.V = self.solver.compute_value_function_bellmann_averaged(
             self.env,
             self.pi,
             dict(
@@ -120,10 +120,10 @@ class Agent:
         """
         reward_agent = self.get_reward_for_given_thetas()
         variance_agent = self.get_variance_for_given_thetas()
-        _, _, pi_s = self.solver.soft_valueIteration(
+        _, _, pi_s = self.solver.soft_value_iteration(
             self.env, dict(reward=reward_agent, variance=variance_agent)
         )
-        _, mu, nu = self.solver.computeFeatureSVF_bellmann_averaged(self.env, pi_s)
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_s)
         return (
             mu,
             nu,

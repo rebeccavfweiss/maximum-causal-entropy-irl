@@ -15,7 +15,7 @@ def create_env():
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 5, "maxiter": 30000}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 30000}
 
     return config_default_learner
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
         print("Demonstrator done")
 
     reward_demonstrator = np.dot(
-        env.reward, demo.solver.computeFeatureSVF_bellmann(env, demo.pi)[0]
+        env.reward, demo.solver.compute_feature_SVF_bellmann(env, demo.pi)[0]
     )
 
     # create agent that uses only expectation matching
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     agent_expectation.compute_and_draw(show, store, 2)
     reward_expectation = np.dot(
         env.reward,
-        agent_expectation.solver.computeFeatureSVF_bellmann(env, agent_expectation.pi)[
+        agent_expectation.solver.compute_feature_SVF_bellmann(env, agent_expectation.pi)[
             0
         ],
     )
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     agent_variance.compute_and_draw(show, store, 4)
     reward_variance = np.dot(
         env.reward,
-        agent_variance.solver.computeFeatureSVF_bellmann(env, agent_variance.pi)[0],
+        agent_variance.solver.compute_feature_SVF_bellmann(env, agent_variance.pi)[0],
     )
 
     if verbose:
