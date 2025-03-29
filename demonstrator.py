@@ -75,7 +75,7 @@ class Demonstrator(ABC):
                 V[t, s] = sum(
                     pi[t, s, a]
                     * sum(
-                        self.env.T[s, s_prime, a]
+                        self.env.T_matrix[s, s_prime, a]
                         * (self.env.reward[s] + self.env.gamma * V[t + 1, s_prime])
                         for s_prime in range(self.env.n_states)
                     )
