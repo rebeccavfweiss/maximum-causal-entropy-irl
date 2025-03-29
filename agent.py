@@ -69,7 +69,7 @@ class Agent:
         fignum : int
             identifier number for figure (default = 0)
         """
-        self.reward = self.get_reward_for_given_thetas()
+        self.reward = self.get_linear_reward_for_given_thetas()
         self.variance = self.get_variance_for_given_thetas()
         _, _, pi_agent = self.solver.soft_value_iteration(
             self.env, dict(reward=self.reward, variance=self.variance)
@@ -88,7 +88,7 @@ class Agent:
             self.V, self.pi, self.reward, show, self.agent_name, fignum, store
         )
 
-    def get_reward_for_given_thetas(self):
+    def get_linear_reward_for_given_thetas(self):
         """
         computes the reward based on theta_e for every state
 
@@ -118,7 +118,7 @@ class Agent:
         -------
         feature expectation and variance, once restricted to the reward features, once the full arrays
         """
-        reward_agent = self.get_reward_for_given_thetas()
+        reward_agent = self.get_linear_reward_for_given_thetas()
         variance_agent = self.get_variance_for_given_thetas()
         _, _, pi_s = self.solver.soft_value_iteration(
             self.env, dict(reward=reward_agent, variance=variance_agent)
