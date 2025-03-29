@@ -26,14 +26,13 @@ class Environment(ABC):
         self.n_actions = None
         self.n_features = None
 
-        self.T = None
-        self.T_sparse_list = None
-        self.terminat_states = None
-        self.feature_matrix = None
+        self.T_matrix, self.terminat_states = self._compute_transition_matrix()
+        self.T_sparse_list = self._compute_transition_sparse_list()
+        self.feature_matrix = self._compute_state_feature_matrix()
 
         # true reward per state
         self.reward = None
-        self.InitD = None
+        self.InitD = self._get_initial_distribution()
 
     def get_reward_for_given_theta(self, theta_e: np.ndarray) -> np.ndarray:
         """
@@ -66,6 +65,10 @@ class Environment(ABC):
         ]
 
         return np.array(variance)
+    
+    @abstractmethod
+    def _compute_state_feature_matrix(self):
+        pass
 
     def get_state_feature_matrix(self) -> np.ndarray:
         """
@@ -75,6 +78,10 @@ class Environment(ABC):
 
     @abstractmethod
     def _compute_transition_matrix(self):
+        pass
+
+    @abstractmethod
+    def _get_initial_distribution(self):
         pass
 
     def _compute_transition_sparse_list(self) -> list[sparse.csc_matrix]:
@@ -87,7 +94,7 @@ class Environment(ABC):
         """
         T_sparse_list = []
         for a in range(self.n_actions):
-            T_sparse_list.append(sparse.csr_matrix(self.T[:, :, a]))
+            T_sparse_list.append(sparse.csr_matrix(self.T_matrix[:, :, a]))
 
         return T_sparse_list
 
