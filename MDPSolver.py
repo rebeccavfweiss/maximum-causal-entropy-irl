@@ -21,7 +21,7 @@ class MDPSolver(ABC):
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
     """
 
-    def __init__(self, T: int, compute_variance : bool):
+    def __init__(self, T: int, compute_variance: bool):
         self.T = T
         self.compute_variance = compute_variance
 
@@ -29,15 +29,15 @@ class MDPSolver(ABC):
     def soft_value_iteration(env: Environment, values: dict[str:any]):
         pass
 
-    def softmax_list(self, A, states):
+    def softmax_list(self, A: np.ndarray, n_states: int) -> np.ndarray:
         """
         computes the softmax of a given matrix column wise
 
         Parameters
         ----------
-        A
+        A : ndarray
             matrix to compute the softmax of
-        state
+        n_states : int
             number of states
 
         Returns
@@ -45,13 +45,16 @@ class MDPSolver(ABC):
         ndarray of numerically stable softmax values
         """
         Amax = A.max(axis=1)
-        Atemp = A - Amax.reshape((states, 1))  # For numerical stability.
+        Atemp = A - Amax.reshape((n_states, 1))  # For numerical stability.
         return Amax + np.log(np.exp(Atemp).sum(axis=1))
 
-
     def generate_episode(
-        self, env: Environment, policy, len_episode: int, init_state: int = None
-    ):
+        self,
+        env: Environment,
+        policy: np.ndarray,
+        len_episode: int,
+        init_state: int = None,
+    ) -> tuple[list[int], np.ndarray]:
         """
         generates an episode in the given setting
 
@@ -64,7 +67,7 @@ class MDPSolver(ABC):
         len_episode : int
             episode length
         init_state : int
-            state to use as starting state (default = None)
+            state to use as starting state
 
         Returns
         -------
@@ -82,7 +85,7 @@ class MDPSolver(ABC):
 
         state_counts_gamma = np.zeros(env.n_states)
         # Selecting a start state according to InitD
-        state = int(np.random.choice(np.arange(env.n_states), p=env.InitD))
+        state = env.reset()
 
         if init_state is not None:
             state = init_state
@@ -95,12 +98,14 @@ class MDPSolver(ABC):
                 break
             probs = changed_policy[t, state]
             action = int(np.random.choice(np.arange(len(probs)), p=probs))
-            next_state = env.T[state, :, action]
-            state = int(np.random.choice(np.arange(env.n_states), p=next_state))
+            next_state, _, _, _ = env.step(action)
+            state = next_state
 
         return episode, state_counts_gamma
 
-    def convert_det_to_stochastic_policy(self, env: Environment, deterministicPolicy):
+    def convert_det_to_stochastic_policy(
+        self, env: Environment, deterministicPolicy
+    ) -> np.ndarray:
         """
         converts a deterministic policy to a stochastic one
 
@@ -125,7 +130,7 @@ class MDPSolver(ABC):
 
         return stochasticPolicy
 
-    def get_T_pi(self, env: Environment, policy):
+    def get_T_pi(self, env: Environment, policy: np.ndarray) -> np.ndarray:
         """
         computes state transition probability based on a policy
 
@@ -133,7 +138,7 @@ class MDPSolver(ABC):
         ----------
         env : environment.Environment
             the environment representing the setting of the problem
-        policy
+        policy : ndarray
             policy to use
 
         Returns
@@ -142,19 +147,18 @@ class MDPSolver(ABC):
             transition probability matrix based on the policy (time dependent)
         """
 
-
         T_pi = np.zeros((self.T, env.n_states, env.n_states))
 
         for t in range(self.T):
             for n_s in range(env.n_states):
                 for a in range(env.n_actions):
-                    T_pi[t, :, n_s] += policy[t, :, a] * env.T[:, n_s, a]
+                    T_pi[t, :, n_s] += policy[t, :, a] * env.T_matrix[:, n_s, a]
 
         return T_pi
 
     def compute_feature_SVF_bellmann_averaged(
-        self, env: Environment, policy, num_iter: int = None
-    ):
+        self, env: Environment, policy: np.ndarray, num_iter: int = None
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         computes average feature SVF
 
@@ -185,8 +189,8 @@ class MDPSolver(ABC):
         nu_list = []
 
         for _ in range(num_iter):
-            SV, feature_expectation, feature_variance = self.compute_feature_SVF_bellmann(
-                env, policy
+            SV, feature_expectation, feature_variance = (
+                self.compute_feature_SVF_bellmann(env, policy)
             )
             sv_list.append(SV)
             mu_list.append(feature_expectation)
@@ -198,7 +202,9 @@ class MDPSolver(ABC):
             np.mean(nu_list, axis=0),
         )
 
-    def compute_feature_SVF_bellmann(self, env: Environment, policy):
+    def compute_feature_SVF_bellmann(
+        self, env: Environment, policy: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         computes feature SVF
 
@@ -208,7 +214,7 @@ class MDPSolver(ABC):
             the environment representing the setting of the problem
         policy : ndarray
             policy to use (time dependent)
-    
+
         Returns
         -------
         SV : ndarray
@@ -234,36 +240,39 @@ class MDPSolver(ABC):
         # Bellman Equation
         SV[0, :] = env.InitD
         for t in range(1, self.T):
-            SV[t, :] = env.gamma * T_pi_sparse[t-1].dot(SV[t - 1, :])
-
-        feature_expectation = sum(
-            env.get_state_feature_matrix().transpose().dot(SV[t]) for t in range(self.T)
-        )
-        
+            SV[t, :] = env.gamma * T_pi_sparse[t - 1].dot(SV[t - 1, :])
 
         feature_matrix = env.get_state_feature_matrix()
-        
+
+        feature_expectation = sum(
+            feature_matrix.transpose().dot(SV[t]) for t in range(self.T)
+        )
+
         # Compute feature_products using batch matrix multiplication
-        feature_products = np.einsum('ai,bj->abij', feature_matrix, feature_matrix)
+        feature_products = np.einsum("ai,bj->abij", feature_matrix, feature_matrix)
 
         feature_variance = np.zeros((env.n_features, env.n_features))
 
         if self.compute_variance:
-            SV = np.array(SV)  # Convert to NumPy array for faster operations
-
             # Compute variance using vectorized operations
             for t1 in range(self.T):
                 for t2 in range(self.T):
                     if t1 == t2:
-                        feature_variance += np.einsum('s,ijs->ij', SV[t1], feature_products.diagonal(axis1=0, axis2=1))
+                        feature_variance += np.einsum(
+                            "s,ijs->ij",
+                            SV[t1],
+                            feature_products.diagonal(axis1=0, axis2=1),
+                        )
                     else:
-                        feature_variance += np.einsum('s,t,stij->ij', SV[t1], SV[t2], feature_products)
+                        feature_variance += np.einsum(
+                            "s,t,stij->ij", SV[t1], SV[t2], feature_products
+                        )
 
         return np.sum(SV, axis=0), feature_expectation, feature_variance
 
     def compute_value_function_bellmann_averaged(
         self, env: Environment, policy, values: dict[str:any], num_iter: int = None
-    ):
+    ) -> np.ndarray:
         """
         compute averages value function using bellmann equations
 
@@ -299,8 +308,8 @@ class MDPSolver(ABC):
         return np.mean(V_list, axis=0)
 
     def compute_value_function_bellmann(
-        self, env: Environment, policy, values: dict[str:any]
-    ):
+        self, env: Environment, policy: np.ndarray, values: dict[str:any]
+    ) -> np.ndarray:
         """
         computes value function using bellmann equations
 
@@ -312,7 +321,6 @@ class MDPSolver(ABC):
             policy to use (can be deterministic or stochastic)
         values : dict[str:any]
             dictionary with the feature expecation and variance term needed for bellmann
-
 
         Returns
         -------
@@ -352,10 +360,12 @@ class MDPSolverExpectation(MDPSolver):
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary) (default = False)
     """
 
-    def __init__(self, T: int=45, compute_variance : bool = False):
+    def __init__(self, T: int = 45, compute_variance: bool = False):
         super().__init__(T, compute_variance)
 
-    def soft_value_iteration(self, env: Environment, values: dict[str:any]):
+    def soft_value_iteration(
+        self, env: Environment, values: dict[str:any]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -382,7 +392,7 @@ class MDPSolverExpectation(MDPSolver):
         for a in range(env.n_actions):
             Q[self.T - 1, :, a] = values["reward"]
 
-        V[self.T - 1, :] = self.softmax_list(Q[self.T-1, :, :], env.n_states)
+        V[self.T - 1, :] = self.softmax_list(Q[self.T - 1, :, :], env.n_states)
 
         for t in range(self.T - 2, -1, -1):
             for a in range(env.n_actions):
@@ -395,7 +405,7 @@ class MDPSolverExpectation(MDPSolver):
         temp = copy.deepcopy(Q)
         for t in range(self.T):
             for s in range(env.n_states):
-                temp[t,s,:] -= V[t,s]
+                temp[t, s, :] -= V[t, s]
 
         pi_s = np.zeros((self.T, env.n_states, env.n_actions))
 
@@ -409,11 +419,9 @@ class MDPSolverExpectation(MDPSolver):
             ).reshape((env.n_states, 1))
 
         for s in env.terminal_states:
-            pi_s[:,s,:] = 0.0
+            pi_s[:, s, :] = 0.0
 
         return Q, V, pi_s
-
-    
 
 
 class MDPSolverVariance(MDPSolver):
@@ -428,10 +436,12 @@ class MDPSolverVariance(MDPSolver):
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary) (default = True)
     """
 
-    def __init__(self, T: int=45, compute_variance : bool = True):
+    def __init__(self, T: int = 45, compute_variance: bool = True):
         super().__init__(T, compute_variance)
 
-    def soft_value_iteration(self, env: Environment, values: dict[str:any]):
+    def soft_value_iteration(
+        self, env: Environment, values: dict[str:any]
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         computes soft value iteration using feature expectation and variance matching
 
@@ -456,9 +466,11 @@ class MDPSolverVariance(MDPSolver):
         Q = np.zeros((self.T, env.n_states, env.n_actions))
 
         for a in range(env.n_actions):
-            Q[self.T - 1, :, a] = values["reward"] + env.gamma**(self.T-1) * values["variance"]
+            Q[self.T - 1, :, a] = (
+                values["reward"] + env.gamma ** (self.T - 1) * values["variance"]
+            )
 
-        V[self.T - 1, :] =  self.softmax_list(Q[self.T-1, :, :], env.n_states)
+        V[self.T - 1, :] = self.softmax_list(Q[self.T - 1, :, :], env.n_states)
 
         for t in range(self.T - 2, -1, -1):
             for a in range(env.n_actions):
@@ -473,7 +485,7 @@ class MDPSolverVariance(MDPSolver):
         temp = copy.deepcopy(Q)
         for t in range(self.T):
             for s in range(env.n_states):
-                temp[t,s,:] -= V[t,s]
+                temp[t, s, :] -= V[t, s]
 
         pi_s = np.zeros((self.T, env.n_states, env.n_actions))
 
@@ -487,6 +499,6 @@ class MDPSolverVariance(MDPSolver):
             ).reshape((env.n_states, 1))
 
         for s in env.terminal_states:
-            pi_s[:,s,:] = 0.0
+            pi_s[:, s, :] = 0.0
 
         return Q, V, pi_s
