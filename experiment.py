@@ -1,16 +1,36 @@
 import agent
 import demonstrator
-import environment
+from simple_environment import SimpleEnvironment
+from gymnasium_environment import MiniGridCrossingEnvironment
 import MDPSolver
 import numpy as np
+from random import randint
 
 
-def create_env():
+def create_simple_env():
 
-    config_env = {"theta_e": [1.0, 1.0, -2.0], "gamma": 1.0}
+    config_env = {
+        "theta": [1.0, 1.0, -2.0],
+        "gamma": 1.0,
+    }
 
-    env = environment.Environment(config_env)
+    env = SimpleEnvironment(config_env)
 
+    return env
+
+
+def create_minigrid_env():
+
+    config_env = {
+        "theta": np.diag([-1.0, -1.0, 0.0, 10]),
+        "gamma": 1.0,
+        "env_name": "MiniGrid-LavaCrossingS9N1-v0",
+        "render_mode": "rgb_array",
+        "grid_size": 13,
+        "seed": randint(1, 100),
+    }
+
+    env = MiniGridCrossingEnvironment(config_env)
     return env
 
 
@@ -23,18 +43,26 @@ def create_config_learner():
 if __name__ == "__main__":
 
     show = False
-    store = True
+    store = False
     verbose = False
-    T = 20
+    n_training_episodes = 500
+    T = 50
 
     # create the environment
-    env = create_env()
+    # env = create_simple_env()
+    env = create_minigrid_env()
 
     # Learner config
     config_default_learner = create_config_learner()
 
     # create demonstrator
-    demo = demonstrator.Demonstrator(env, demonstrator_name="Demonstrator", T=T)
+    # demo = demonstrator.SimpleDemonstrator(env, demonstrator_name="SimpleDemonstrator", T=T)
+    demo = demonstrator.GymDemonstrator(
+        env,
+        demonstrator_name="GymDemonstrator",
+        T=T,
+        n_training_episodes=n_training_episodes,
+    )
     demo.draw(show, store, 0)
     print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
     print("Demonstrator's variance: ", demo.mu_demonstrator[1])
@@ -58,9 +86,9 @@ if __name__ == "__main__":
     agent_expectation.compute_and_draw(show, store, 2)
     reward_expectation = np.dot(
         env.reward,
-        agent_expectation.solver.compute_feature_SVF_bellmann(env, agent_expectation.pi)[
-            0
-        ],
+        agent_expectation.solver.compute_feature_SVF_bellmann(
+            env, agent_expectation.pi
+        )[0],
     )
 
     if verbose:
@@ -70,7 +98,7 @@ if __name__ == "__main__":
 
     print("----- Demonstrator -----")
     print("reward: ", reward_demonstrator)
-    print("theta_*: ", env.theta_e)
+    print("theta_*: ", env.theta_reward)
     print("")
 
     print("----- Expectation -----")
@@ -82,13 +110,7 @@ if __name__ == "__main__":
         ")",
     )
     print("theta_e: ", agent_expectation.theta_e)
-    print(
-        "policy difference:",
-        sum(
-            np.linalg.norm(demo.pi[i, :, :] - agent_expectation.pi[i, :, :], ord="fro")
-            for i in range(demo.pi.shape[0])
-        ),
-    )
+
     print("iterations used: ", iter_expectation)
     print(
         "time used (total/ avg. per iteration): ",
@@ -126,13 +148,7 @@ if __name__ == "__main__":
     )
     print("theta_e: ", agent_variance.theta_e)
     print("theta_v: ", agent_variance.theta_v)
-    print(
-        "policy difference:",
-        sum(
-            np.linalg.norm(demo.pi[i, :, :] - agent_variance.pi[i, :, :], ord="fro")
-            for i in range(demo.pi.shape[0])
-        ),
-    )
+
     print("iterations used: ", iter_variance)
     print(
         "time used (total/ avg. per iteration): ",
