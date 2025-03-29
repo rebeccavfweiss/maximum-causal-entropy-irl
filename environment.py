@@ -7,7 +7,6 @@ np.set_printoptions(precision=4)
 
 
 class Environment(ABC):
-
     """
     Base class to generalize access to SimpleEnvironment and Gymnasium environments
 
@@ -18,13 +17,13 @@ class Environment(ABC):
     """
 
     def __init__(self, env_args: dict):
-        
+
         self.gamma = env_args["gamma"]
         self.theta_reward = env_args["theta"]
 
         # variables that need to be defined in the specific environment
         self.n_states = None
-        self.n_actions  = None
+        self.n_actions = None
         self.n_features = None
 
         self.T = None
@@ -32,12 +31,11 @@ class Environment(ABC):
         self.terminat_states = None
         self.feature_matrix = None
 
-        #true reward per state
+        # true reward per state
         self.reward = None
         self.InitD = None
 
-
-    def get_reward_for_given_theta(self, theta_e:np.ndarray) -> np.ndarray:
+    def get_reward_for_given_theta(self, theta_e: np.ndarray) -> np.ndarray:
         """
         Parameters
         ----------
@@ -50,7 +48,7 @@ class Environment(ABC):
         reward = self.feature_matrix.dot(theta_e)
         return np.array(reward)
 
-    def get_variance_for_given_theta(self, theta_v:np.ndarray) -> np.ndarray:
+    def get_variance_for_given_theta(self, theta_v: np.ndarray) -> np.ndarray:
         """
         computes the variance term for soft value iteration for given theta_v
 
@@ -92,20 +90,15 @@ class Environment(ABC):
             T_sparse_list.append(sparse.csr_matrix(self.T[:, :, a]))
 
         return T_sparse_list
-    
+
     @abstractmethod
     def reset(self):
         pass
-    
+
     @abstractmethod
     def step(self, action):
         pass
-    
+
     @abstractmethod
-    def render(
-        self,
-        pi,
-        T: int = 20,
-        **kwargs
-    ):
+    def render(self, pi, T: int = 20, **kwargs):
         pass
