@@ -21,18 +21,8 @@ class Environment(ABC):
         self.gamma = env_args["gamma"]
         self.theta_reward = env_args["theta"]
 
-        # variables that need to be defined in the specific environment
-        self.n_states = None
-        self.n_actions = None
-        self.n_features = None
-
-        self.T_matrix, self.terminat_states = self._compute_transition_matrix()
-        self.T_sparse_list = self._compute_transition_sparse_list()
-        self.feature_matrix = self._compute_state_feature_matrix()
-
         # true reward per state
         self.reward = None
-        self.InitD = self._get_initial_distribution()
 
     def get_reward_for_given_theta(self, theta_e: np.ndarray) -> np.ndarray:
         """

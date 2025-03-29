@@ -17,14 +17,15 @@ class SimpleEnvironment(Environment):
     """
 
     def __init__(self, env_args: dict):
-
         super().__init__(env_args)
+
         # initialise MDP parameters
         self.actions = {"up": 0, "left": 1, "down": 2, "right": 3}
         self.actions_names = ["up", "left", "down", "right"]
         self.n_actions = len(self.actions)
         self.width = 9
         self.height = 5
+        self.theta_reward = env_args["theta"]
 
         self.n_features = len(
             env_args["theta"]
@@ -32,11 +33,18 @@ class SimpleEnvironment(Environment):
 
         self.n_states = self.width * self.height + 1
 
+        self.InitD = self._get_initial_distribution()
+
         self.state_object_array = self.__place_objects_on_the_grid()
+
+        self.T_matrix, self.terminat_states = self._compute_transition_matrix()
+        self.T_sparse_list = self._compute_transition_sparse_list()
+        self.feature_matrix = self._compute_state_feature_matrix()
 
         self.reward = self.get_reward_for_given_theta(self.theta_reward)
         
         self.agent_position = int(np.random.choice(np.arange(self.n_states), p=self.InitD))
+
 
     def _compute_state_feature_matrix(self) -> np.ndarray:
         """
@@ -62,6 +70,7 @@ class SimpleEnvironment(Environment):
         """
 
         P = np.zeros((self.n_states, self.n_states, self.n_actions))
+        self.terminal_states = self.__compute_terminal_states()
 
         for s in range(self.n_states):
             if s in self.terminal_states:
@@ -79,9 +88,7 @@ class SimpleEnvironment(Environment):
                     n_s = int(next_states[np.where(possible_actions == a)][0])
                     P[s, n_s, a] = 1.0
 
-        terminal_states = self.__compute_terminal_states()
-
-        return P, terminal_states
+        return P, self.terminal_states
     
     def _get_initial_distribution(self) -> np.ndarray:
         """
@@ -139,13 +146,14 @@ class SimpleEnvironment(Environment):
     def render(
         self,
         pi:np.ndarray,
-        T:int,
-        reward:np.ndarray,
-        V:np.ndarray,
+        T:int = 20,
+        reward:np.ndarray = None,
+        V:np.ndarray = None,
         show: bool = False,
         strname: str = "",
         fignum: int = 0,
-        store: bool = False,    
+        store: bool = False,  
+        **kwargs  
     ) -> None:
         """
         draws a given policy and reward in the gridworld

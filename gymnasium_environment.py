@@ -35,6 +35,12 @@ class GymEnvironment(Environment):
 
         self.n_actions = self.env.action_space.n
 
+        self.T_matrix, self.terminal_states = self._compute_transition_matrix()
+        self.T_sparse_list = self._compute_transition_sparse_list()
+        self.feature_matrix = self._compute_state_feature_matrix()
+
+        self.InitD = self._get_initial_distribution()
+
         self.width = self.env.width
         self.height = self.env.height
         self.n_states = self.feature_matrix.shape[0]
@@ -80,7 +86,7 @@ class GymEnvironment(Environment):
         return new_state, reward, terminated, truncated
 
     def render(
-        self, pi: np.ndarray, T: int = 20, strname: str = "", fps: int = 1
+        self, pi: np.ndarray, T: int = 20, strname: str = "", fps: int = 1, **kwargs
     ) -> None:
         """
         Function to record a video of the given policy in the environment
