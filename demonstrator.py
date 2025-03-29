@@ -99,7 +99,7 @@ class Demonstrator(ABC):
         """
 
         self.reward = copy.deepcopy(self.env.reward)
-        self.env.draw(
+        self.env.render(
             self.V,
             self.pi,
             self.reward,
