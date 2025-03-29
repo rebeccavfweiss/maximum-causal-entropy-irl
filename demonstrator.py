@@ -100,14 +100,14 @@ class Demonstrator(ABC):
 
         self.reward = copy.deepcopy(self.env.reward)
         self.env.render(
-            self.V,
-            self.pi,
-            self.reward,
-            show,
-            self.demonstrator_name,
-            fignum,
-            store,
-            self.T,
+            V=self.V,
+            pi=self.pi,
+            reward=self.reward,
+            show=show,
+            strname=self.demonstrator_name,
+            fignum=fignum,
+            store=store,
+            T=self.T,
         )
 
 
