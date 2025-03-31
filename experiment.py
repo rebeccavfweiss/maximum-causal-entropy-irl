@@ -22,11 +22,11 @@ def create_simple_env():
 def create_minigrid_env():
 
     config_env = {
-        "theta": np.diag([-1.0, -1.0, 0.0, 10]),
+        "theta": np.diag([-1.0, -1.0, 0.0, 10.0, -10.0]),
         "gamma": 1.0,
         "env_name": "MiniGrid-LavaCrossingS9N1-v0",
         "render_mode": "rgb_array",
-        "grid_size": 13,
+        "grid_size": 9,
         "seed": randint(1, 100),
     }
 
@@ -35,7 +35,7 @@ def create_minigrid_env():
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 30000}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 300}
 
     return config_default_learner
 
@@ -45,8 +45,8 @@ if __name__ == "__main__":
     show = False
     store = False
     verbose = False
-    n_training_episodes = 500
-    T = 50
+    n_training_episodes = 5000
+    T = 30
 
     # create the environment
     # env = create_simple_env()
