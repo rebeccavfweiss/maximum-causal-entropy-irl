@@ -166,15 +166,16 @@ class MiniGridCrossingEnvironment(GymEnvironment):
         """
         # for now only distance to goal nothing else and direction
         # TODO find a way to access cell types to encode dist to dangerous zones
-        feature_matrix = np.zeros((self.n_states, 4))
+        feature_matrix = np.zeros((self.n_states, 5))
+        grid = self.env.env.grid
 
         for n in range(self.n_states):
             x, y, orientation = self.env.from_state_index(n)
-            feature_matrix[n][0] = x - self.env.goal_position[0]
-            feature_matrix[n][1] = y - self.env.goal_position[1]
+            feature_matrix[n][0] = (x - self.env.goal_position[0])/self.env.width
+            feature_matrix[n][1] = (y - self.env.goal_position[1])/self.env.height
             feature_matrix[n][2] = orientation
             feature_matrix[n][3] = [x, y] == self.env.goal_position
-            # feature_matrix[n][2] = float(grid[n].type in {"wall", "lava"})
+            feature_matrix[n][4] = float((grid.get(x,y) is not None) and (grid.get(x,y).type in {"wall", "lava"}))
 
         return feature_matrix
 
@@ -280,7 +281,7 @@ class CoordStateWrapper(gym.ObservationWrapper):
         self.height = env.height
         self.n_orientations = 4  # possible orientations (0-3)
         self.n_actions = 3  # restrict actions to actually used ones in the environment
-        self.grid = self.env.grid
+        self.grid = env.grid
         self.goal_position = [self.width - 2, self.height - 2]
 
         # Adjust the observation space to include x, y, and state index
@@ -366,6 +367,8 @@ class CoordStateWrapper(gym.ObservationWrapper):
         orientation = self.env.agent_dir
         state_index = self.to_state_index(x, y, orientation)
 
+        #TODO compute observations in a way can be used everywhere to compute same reward to reduce redundancy (rn we have it both in the feature matrix comp and in the reward wrapper)
+
         # Construct the new observation
         extended_obs = {
             "original_obs": obs,
@@ -409,14 +412,14 @@ class CoordStateWrapper(gym.ObservationWrapper):
         # Implement your custom reward logic
         if state_coordinates is not None and state_index is not None:
 
-            diff_x = state_coordinates[0] - self.goal_position[0]  # /self.width
-            diff_y = state_coordinates[1] - self.goal_position[1]  # /self.height
+            diff_x = (state_coordinates[0] - self.goal_position[0])/self.width
+            diff_y = (state_coordinates[1] - self.goal_position[1])/self.height
             reward = -(diff_x**2 + diff_y**2)
             if done:
                 if reward == 0:
                     reward += 10
-                # else:
-                #    reward -= 10
+                else:
+                    reward -= 10
 
         return state_index, reward, done, truncated, info
 
