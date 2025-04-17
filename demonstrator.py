@@ -2,7 +2,7 @@ import MDPSolver
 from environment import Environment
 from simple_environment import SimpleEnvironment
 from gymnasium_environment import GymEnvironment
-from abc import ABC
+from abc import ABC, abstractmethod
 import copy
 import numpy as np
 import random
@@ -37,6 +37,10 @@ class Demonstrator(ABC):
         self.gamma = gamma
         self.solver = MDPSolver.MDPSolverExpectation(T, compute_variance=True)
         self.mu_demonstrator = None
+
+    @abstractmethod
+    def _define_policy(self):
+        pass
 
     def get_mu_using_reward_features(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -137,6 +141,19 @@ class SimpleDemonstrator(Demonstrator):
     ):
         super().__init__(env, demonstrator_name, T, gamma)
 
+        self.pi = self._define_policy()
+
+        self.mu_demonstrator = self.get_mu_using_reward_features()
+
+    def _define_policy(self):
+        """
+        Method to compute or manually define the policy of the demonstrator
+
+        Returns
+        -------
+        pi_s : numpy.ndarray
+            policy of the demonstrator
+        """
         pi_s = np.zeros((self.T, self.env.n_states, self.env.n_actions))
 
         # define the demonstrator's behavior in a specific way
@@ -153,9 +170,8 @@ class SimpleDemonstrator(Demonstrator):
             pi_s[t, self.env.point_to_int(7, 0), self.env.actions["down"]] = 1.0
 
         self.V = self._compute_value_function(pi_s)
-        self.pi = pi_s
 
-        self.mu_demonstrator = self.get_mu_using_reward_features()
+        return pi_s
 
 
 class GymDemonstrator(Demonstrator):
@@ -184,114 +200,93 @@ class GymDemonstrator(Demonstrator):
         demonstrator_name: str,
         T: int = 45,
         gamma: float = 1.0,
-        learning_rate: float = 0.05,
-        n_training_episodes: int = 5000,
     ):
         super().__init__(env, demonstrator_name, T, gamma)
 
-        self.learning_rate = learning_rate
-        self.n_training_episodes = n_training_episodes
-
-        self.pi = self.__train_demonstrator()
+        self.pi = self._define_policy()
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
-    def __train_demonstrator(self) -> np.ndarray:
-        """
-        Training method using Q-Learning to train the Demonstrator in the given environment
-
-        Returns
-        -------
-        pi_s : ndarray
-            computed policy based on Q table
-        """
-
+    def _define_policy(self):
+        # TODO generalize to more than one hole (for now assumption only one)
         pi_s = np.zeros((self.T, self.env.n_states, self.env.n_actions))
-        Qtable = np.zeros((self.env.n_states, self.env.n_actions))
 
-        max_epsilon = 1.0
-        min_epsilon = 0.05
-        decay_rate = 0.0005
+        lava_states = self.env.env.forbidden_states
 
-        for episode in tqdm(range(self.n_training_episodes)):
-            # Reduce epsilon (because we need less and less exploration)
-            epsilon = min_epsilon + (max_epsilon - min_epsilon) * np.exp(
-                -decay_rate * episode
-            )
-            state = self.env.reset()
-            terminated = False
-            truncated = False
+        if lava_states[0][0] == lava_states[1][0]:
+            # x coordinate of the lava are the same -> vertical line
+            missing_y = [lava_states[i][1]!= i+1 for i in range(self.env.height-3)]
+            # add one to get the correct coordinate (due to borders)
+            hole_y = np.argmax(missing_y) + 1
 
-            for step in range(self.T):
-                # Choose the action At using epsilon greedy policy
-                action = self.__epsilon_greedy_policy(Qtable, state, epsilon)
+            state = [1,1,0]
+            state_index = self.env.env.to_state_index(*state)
+            #orient downward
+            pi_s[0,state_index,1] = 1.0
+            
+            for y in range(1,hole_y):
+                state = [1, y, 1]
+                state_index = self.env.env.to_state_index(*state)
+                # move forward in these states
+                pi_s[0,state_index, 2] = 1.0
 
-                # Take action At and observe Rt+1 and St+1
-                new_state, reward, terminated, truncated = self.env.step(action)
+            state = [1,hole_y,1]
+            state_index = self.env.env.to_state_index(*state)
+            #orient to the right
+            pi_s[0,state_index,0] = 1.0
 
-                Qtable[state][action] = Qtable[state][action] + self.learning_rate * (
-                    reward
-                    + self.gamma * np.max(Qtable[new_state])
-                    - Qtable[state][action]
-                )
+            for x in range(1, self.env.width-2):
+                state = [x, hole_y, 0]
+                state_index = self.env.env.to_state_index(*state)
+                # move forward in these states
+                pi_s[0,state_index, 2] = 1.0
 
-                if terminated or truncated:
-                    break
+            state = [self.env.width-2,hole_y,0]
+            state_index = self.env.env.to_state_index(*state)
+            #orient downward
+            pi_s[0,state_index,1] = 1.0
 
-                state = new_state
+            for y in range(hole_y, self.env.height-2):
+                state = [self.env.width-2, y, 1]
+                state_index = self.env.env.to_state_index(*state)
+                # move forward in these states
+                pi_s[0,state_index, 2] = 1.0   
 
-        # define (deterministic) policy based on Q table
-        for state in range(self.env.n_states):
-            for t in range(self.T):
-                best_action = np.argmax(Qtable[state])
-                pi_s[:, state, best_action] = 1.0  # Best action with probability 1
+        else:
+            # y coordinate of the lava are the same -> horizontal line
+            missing_x = [lava_states[i][0]!= i+1 for i in range(self.env.height-3)]
+            # add one to get the correct coordinate (due to borders)
+            hole_x = np.argmax(missing_x) + 1
+            
+            for x in range(1,hole_x):
+                state = [x, 1, 0]
+                state_index = self.env.env.to_state_index(*state)
+                # move forward in these states
+                pi_s[0,state_index, 2] = 1.0
+
+            state = [hole_x,1,0]
+            state_index = self.env.env.to_state_index(*state)
+            #orient downward
+            pi_s[0,state_index,1] = 1.0
+
+            for y in range(1, self.env.height-2):
+                state = [hole_x, y, 1]
+                state_index = self.env.env.to_state_index(*state)
+                # move forward in these states
+                pi_s[0,state_index, 2] = 1.0
+
+            state = [hole_x,self.env.height-2, 1]
+            state_index = self.env.env.to_state_index(*state)
+            #orient to the right
+            pi_s[0,state_index,0] = 1.0
+
+            for x in range(hole_x, self.env.width-2):
+                state = [x, self.env.height-2, 0]
+                state_index = self.env.env.to_state_index(*state)
+                # move forward in these states
+                pi_s[0,state_index, 2] = 1.0  
+
+        for t in range(1,self.T):
+            #time independent policy
+            pi_s[t] = pi_s[0]
 
         return pi_s
-
-    def __epsilon_greedy_policy(
-        self, Qtable: np.ndarray, state: int, epsilon: float
-    ) -> int:
-        """
-        Helper function to compute an epsilon greedy policy based on the Q table
-
-        Parameters
-        ----------
-        Qtable : ndarray
-            Q table to base policy on
-        state : int
-            current state
-        epsilon : float
-            exploration probability
-
-        Returns
-        -------
-        action : int
-            what action to chose in the given state
-        """
-        random_num = random.uniform(0, 1)
-
-        if random_num > epsilon:
-            action = self.__greedy_policy(Qtable, state)
-        else:
-            action = self.env.action_sample()
-
-        return action
-
-    def __greedy_policy(self, Qtable, state) -> int:
-        """
-        Helper function to compute a greedy policy based on the Q table
-
-        Parameters
-        ----------
-        Qtable : ndarray
-            Q table to base policy on
-        state : int
-            current state
-
-        Returns
-        -------
-        action : int
-            what action to chose in the given state
-        """
-        action = np.argmax(Qtable[state][:])
-
-        return action
