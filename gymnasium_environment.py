@@ -25,13 +25,13 @@ class GymEnvironment(Environment):
             render_mode=env_args["render_mode"],
             size=env_args["grid_size"],
         )
-        # inelegant way to move around unwanted wrappers to get to raw data structures
-        self.env = self.env.env.env
-        if env_args["use_CoordStateWrapper"]:
-            self.env = CrossingCoordStateWrapper(self.env)
 
         # to always produce the same grid when reset() is called
         self.seed = env_args["seed"]
+        # inelegant way to move around unwanted wrappers to get to raw data structures
+        self.env = self.env.env.env
+        if env_args["use_CoordStateWrapper"]:
+            self.env = CrossingCoordStateWrapper(self.env, seed = self.seed)        
 
         self.n_actions = self.env.action_space.n
 
@@ -170,8 +170,8 @@ class MiniGridCrossingEnvironment(GymEnvironment):
 
         for n in range(self.n_states):
             x, y, _ = self.env.from_state_index(n)
-            feature_matrix[n][0] = x - self.env.goal_position[0] / self.env.width
-            feature_matrix[n][1] = y - self.env.goal_position[1] / self.env.height
+            feature_matrix[n][0] = (x - self.env.goal_position[0]) / self.env.width
+            feature_matrix[n][1] = (y - self.env.goal_position[1]) / self.env.height
             feature_matrix[n][2] = (
                 np.mean(
                     [
@@ -292,15 +292,18 @@ class CrossingCoordStateWrapper(gym.ObservationWrapper):
     ----------
     env : Env
         environment for which the custom functions are wanted
+    seed : int
+        seed to fix randomization
     """
 
-    def __init__(self, env: gym.Env):
+    def __init__(self, env: gym.Env, seed:int = None):
         super().__init__(env)
         self.width = env.width
         self.height = env.height
         self.n_orientations = 4  # possible orientations (0-3)
         self.n_actions = 3  # restrict actions to actually used ones in the environment
-        self.env.reset()
+        self.seed = seed
+        self.env.reset(seed = self.seed)
         self.grid = env.grid
         self.forbidden_states = self.compute_forbidden_states()
         self.goal_position = [self.width - 2, self.height - 2]
