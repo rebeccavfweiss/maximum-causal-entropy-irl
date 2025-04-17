@@ -28,7 +28,7 @@ class GymEnvironment(Environment):
         # inelegant way to move around unwanted wrappers to get to raw data structures
         self.env = self.env.env.env
         if env_args["use_CoordStateWrapper"]:
-            self.env = CoordStateWrapper(self.env)
+            self.env = CrossingCoordStateWrapper(self.env)
 
         # to always produce the same grid when reset() is called
         self.seed = env_args["seed"]
@@ -113,7 +113,7 @@ class GymEnvironment(Environment):
         img = self.env.render()
         images.append(img)
         t = 0
-        while (not terminated or truncated) and t < T:
+        while (not (terminated or truncated)) and t < T:
             # Take the action (index) that have the maximum expected future reward given that state
             action = q_learning_policy(pi, state, t)
             state, _, terminated, truncated = self.step(action)
@@ -164,18 +164,37 @@ class MiniGridCrossingEnvironment(GymEnvironment):
         feature_matrix : ndarray
             representing full feature matrix
         """
-        # for now only distance to goal nothing else and direction
-        # TODO find a way to access cell types to encode dist to dangerous zones
-        feature_matrix = np.zeros((self.n_states, 5))
+
+        feature_matrix = np.zeros((self.n_states, 6))
         grid = self.env.env.grid
 
         for n in range(self.n_states):
-            x, y, orientation = self.env.from_state_index(n)
-            feature_matrix[n][0] = (x - self.env.goal_position[0])/self.env.width
-            feature_matrix[n][1] = (y - self.env.goal_position[1])/self.env.height
-            feature_matrix[n][2] = orientation
-            feature_matrix[n][3] = [x, y] == self.env.goal_position
-            feature_matrix[n][4] = float((grid.get(x,y) is not None) and (grid.get(x,y).type in {"wall", "lava"}))
+            x, y, _ = self.env.from_state_index(n)
+            feature_matrix[n][0] = x - self.env.goal_position[0] / self.env.width
+            feature_matrix[n][1] = y - self.env.goal_position[1] / self.env.height
+            feature_matrix[n][2] = (
+                np.mean(
+                    [
+                        x - self.env.forbidden_states[i][0]
+                        for i in range(len(self.env.forbidden_states))
+                    ]
+                )
+                / self.env.width
+            )
+            feature_matrix[n][3] = (
+                np.mean(
+                    [
+                        y - self.env.forbidden_states[i][1]
+                        for i in range(len(self.env.forbidden_states))
+                    ]
+                )
+                / self.env.width
+            )
+            feature_matrix[n][4] = [x, y] == self.env.goal_position
+            feature_matrix[n][5] = float(
+                (grid.get(x, y) is not None)
+                and (grid.get(x, y).type in {"wall", "lava"})
+            )
 
         return feature_matrix
 
@@ -265,7 +284,7 @@ class MiniGridCrossingEnvironment(GymEnvironment):
         return np.array(reward)
 
 
-class CoordStateWrapper(gym.ObservationWrapper):
+class CrossingCoordStateWrapper(gym.ObservationWrapper):
     """
     Gym wrapper to define a custom observation state and reward function
 
@@ -281,7 +300,9 @@ class CoordStateWrapper(gym.ObservationWrapper):
         self.height = env.height
         self.n_orientations = 4  # possible orientations (0-3)
         self.n_actions = 3  # restrict actions to actually used ones in the environment
+        self.env.reset()
         self.grid = env.grid
+        self.forbidden_states = self.compute_forbidden_states()
         self.goal_position = [self.width - 2, self.height - 2]
 
         # Adjust the observation space to include x, y, and state index
@@ -348,6 +369,24 @@ class CoordStateWrapper(gym.ObservationWrapper):
         x = xy_index % self.width
         return x, y, orientation
 
+    def compute_forbidden_states(self) -> list[list[int]]:
+        """
+        Looks up the coordinates of the forbidden (lava) states in order to use them for feature computations
+
+        Returns
+        -------
+        forbidden_states : list[list[int]]
+        """
+        forbidden_states = []
+        for x in range(1, self.width - 1):
+            for y in range(1, self.height - 1):
+                if (self.grid.get(x, y) is not None) and (
+                    self.grid.get(x, y).type == "lava"
+                ):
+                    forbidden_states.append([x, y])
+
+        return forbidden_states
+
     def observation(self, obs) -> dict[any]:
         """
         Custom observation
@@ -366,8 +405,6 @@ class CoordStateWrapper(gym.ObservationWrapper):
         x, y = self.env.agent_pos
         orientation = self.env.agent_dir
         state_index = self.to_state_index(x, y, orientation)
-
-        #TODO compute observations in a way can be used everywhere to compute same reward to reduce redundancy (rn we have it both in the feature matrix comp and in the reward wrapper)
 
         # Construct the new observation
         extended_obs = {
@@ -400,23 +437,38 @@ class CoordStateWrapper(gym.ObservationWrapper):
         truncated : bool
             if episode was truncated
         """
-        # Take a step in the environment
+
         obs, reward, done, truncated, info = self.env.step(action)
         obs = self.observation(obs)
-        # Access your custom features from the observation
-        state_coordinates = obs.get(
-            "coordinates"
-        )  # Assuming you've added this in your observation wrapper
-        state_index = obs.get("state_index")  # Assuming this exists as well
+
+        state_coordinates = obs.get("coordinates")
+        state_index = obs.get("state_index")
 
         # Implement your custom reward logic
         if state_coordinates is not None and state_index is not None:
-
-            diff_x = (state_coordinates[0] - self.goal_position[0])/self.width
-            diff_y = (state_coordinates[1] - self.goal_position[1])/self.height
-            reward = -(diff_x**2 + diff_y**2)
+            diff_goal_x = state_coordinates[0] - self.goal_position[0] / self.width
+            diff_goal_y = state_coordinates[1] - self.goal_position[1] / self.height
+            diff_lava_x = (
+                np.mean(
+                    [
+                        state_coordinates[0] - self.forbidden_states[i][0]
+                        for i in range(len(self.forbidden_states))
+                    ]
+                )
+                / self.width
+            )
+            diff_lava_y = (
+                np.mean(
+                    [
+                        np.abs(state_coordinates[1] - self.forbidden_states[i][1])
+                        for i in range(len(self.forbidden_states))
+                    ]
+                )
+                / self.height
+            )
+            reward = -(diff_goal_x**2 + diff_goal_y**2) + 0.5*(diff_lava_x**2 + diff_lava_y**2)
             if done:
-                if reward == 0:
+                if (diff_goal_x == 0) and (diff_goal_y == 0):
                     reward += 10
                 else:
                     reward -= 10
