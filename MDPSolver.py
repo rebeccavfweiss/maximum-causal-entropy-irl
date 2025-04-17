@@ -248,12 +248,13 @@ class MDPSolver(ABC):
             feature_matrix.transpose().dot(SV[t]) for t in range(self.T)
         )
 
-        # Compute feature_products using batch matrix multiplication
-        feature_products = np.einsum("ai,bj->abij", feature_matrix, feature_matrix)
-
         feature_variance = np.zeros((env.n_features, env.n_features))
 
         if self.compute_variance:
+
+                # Compute feature_products using batch matrix multiplication
+            feature_products = np.einsum("ai,bj->abij", feature_matrix, feature_matrix)
+
             # Compute variance using vectorized operations
             for t1 in range(self.T):
                 for t2 in range(self.T):
