@@ -83,7 +83,13 @@ class Agent:
         )  # compute the value function w.r.t to true reward parameters
 
         self.env.render(
-            pi=self.pi, reward=self.reward, V=self.V, show=show, strname=self.agent_name, fignum=fignum, store =store
+            pi=self.pi,
+            reward=self.reward,
+            V=self.V,
+            show=show,
+            strname=self.agent_name,
+            fignum=fignum,
+            store=store,
         )
 
     def get_linear_reward_for_given_thetas(self) -> np.ndarray:
