@@ -5,8 +5,7 @@ from gymnasium_environment import GymEnvironment
 from abc import ABC, abstractmethod
 import copy
 import numpy as np
-import random
-from tqdm import tqdm
+from operator import itemgetter
 
 
 class Demonstrator(ABC):
@@ -214,9 +213,11 @@ class GymDemonstrator(Demonstrator):
 
         if lava_states[0][0] == lava_states[1][0]:
             # x coordinate of the lava are the same -> vertical line
-            missing_y = [lava_states[i][1]!= i+1 for i in range(self.env.height-3)]
-            # add one to get the correct coordinate (due to borders)
-            hole_y = np.argmax(missing_y) + 1
+            lava_y = list( map(itemgetter(1), lava_states ))
+
+            for i in range(1,self.env.height-1):
+                if i not in lava_y:
+                    hole_y = i
 
             state = [1,1,0]
             state_index = self.env.env.to_state_index(*state)
@@ -251,11 +252,14 @@ class GymDemonstrator(Demonstrator):
                 # move forward in these states
                 pi_s[0,state_index, 2] = 1.0   
 
+
         else:
             # y coordinate of the lava are the same -> horizontal line
-            missing_x = [lava_states[i][0]!= i+1 for i in range(self.env.height-3)]
-            # add one to get the correct coordinate (due to borders)
-            hole_x = np.argmax(missing_x) + 1
+            lava_x = list( map(itemgetter(0), lava_states ))
+
+            for i in range(1,self.env.width-1):
+                if i not in lava_x:
+                    hole_x = i
             
             for x in range(1,hole_x):
                 state = [x, 1, 0]
