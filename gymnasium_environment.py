@@ -86,7 +86,7 @@ class GymEnvironment(Environment):
         return new_state, reward, terminated, truncated
 
     def render(
-        self, pi: np.ndarray, T: int = 20, strname: str = "", fps: int = 1, **kwargs
+        self, pi: np.ndarray, T: int = 20, store:bool=False, strname: str = "", fps: int = 1, **kwargs
     ) -> None:
         """
         Function to record a video of the given policy in the environment
@@ -97,6 +97,8 @@ class GymEnvironment(Environment):
             policy to use
         T : int
             maximal episode length
+        store : bool
+            whether to store the rendering
         strname : str
             file name to store
         fps : int
@@ -120,9 +122,10 @@ class GymEnvironment(Environment):
             img = self.env.render()
             images.append(img)
             t += 1
-        imageio.mimsave(
-            strname + ".mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
-        )
+        if store:
+            imageio.mimsave(
+                strname + ".mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
+            )
 
     def action_sample(self) -> int:
         """
@@ -170,21 +173,21 @@ class MiniGridCrossingEnvironment(GymEnvironment):
 
         for n in range(self.n_states):
             x, y, _ = self.env.from_state_index(n)
-            feature_matrix[n][0] = (x - self.env.goal_position[0]) / self.env.width
-            feature_matrix[n][1] = (y - self.env.goal_position[1]) / self.env.height
+            feature_matrix[n][0] = abs(x - self.env.goal_position[0]) / self.env.width
+            feature_matrix[n][1] = abs(y - self.env.goal_position[1]) / self.env.height
             feature_matrix[n][2] = (
-                np.mean(
+                np.min(
                     [
-                        x - self.env.forbidden_states[i][0]
+                        abs(x - self.env.forbidden_states[i][0])
                         for i in range(len(self.env.forbidden_states))
                     ]
                 )
                 / self.env.width
             )
             feature_matrix[n][3] = (
-                np.mean(
+                np.min(
                     [
-                        y - self.env.forbidden_states[i][1]
+                        abs(y - self.env.forbidden_states[i][1])
                         for i in range(len(self.env.forbidden_states))
                     ]
                 )
@@ -449,21 +452,21 @@ class CrossingCoordStateWrapper(gym.ObservationWrapper):
 
         # Implement your custom reward logic
         if state_coordinates is not None and state_index is not None:
-            diff_goal_x = state_coordinates[0] - self.goal_position[0] / self.width
-            diff_goal_y = state_coordinates[1] - self.goal_position[1] / self.height
+            diff_goal_x = abs(state_coordinates[0] - self.goal_position[0]) / self.width
+            diff_goal_y = abs(state_coordinates[1] - self.goal_position[1]) / self.height
             diff_lava_x = (
-                np.mean(
+                np.min(
                     [
-                        state_coordinates[0] - self.forbidden_states[i][0]
+                        abs(state_coordinates[0] - self.forbidden_states[i][0])
                         for i in range(len(self.forbidden_states))
                     ]
                 )
                 / self.width
             )
             diff_lava_y = (
-                np.mean(
+                np.min(
                     [
-                        np.abs(state_coordinates[1] - self.forbidden_states[i][1])
+                        abs(state_coordinates[1] - self.forbidden_states[i][1])
                         for i in range(len(self.forbidden_states))
                     ]
                 )
