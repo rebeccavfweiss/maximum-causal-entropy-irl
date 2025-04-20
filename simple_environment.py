@@ -147,12 +147,12 @@ class SimpleEnvironment(Environment):
         self,
         pi:np.ndarray,
         T:int = 20,
+        store: bool = False,  
         reward:np.ndarray = None,
         V:np.ndarray = None,
         show: bool = False,
         strname: str = "",
         fignum: int = 0,
-        store: bool = False,  
         **kwargs  
     ) -> None:
         """
@@ -166,12 +166,13 @@ class SimpleEnvironment(Environment):
             reward for the different states
         show : bool
             wheter or not to show the plot
+        store : bool
+            whether or not plots should be store
         strname : str
             plot title
         fignum : int
-            figure identifier (default = 0)
-        store : bool
-            whether or not plots should be store (default = False)
+            figure identifier
+        
         """
         f = fignum
         plt.figure(f)
