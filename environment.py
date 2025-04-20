@@ -97,5 +97,5 @@ class Environment(ABC):
         pass
 
     @abstractmethod
-    def render(self, pi, T: int = 20, **kwargs):
+    def render(self, pi, T: int = 20, store:bool=False,**kwargs):
         pass
