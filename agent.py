@@ -85,6 +85,7 @@ class Agent:
         self.env.render(
             pi=self.pi,
             reward=self.reward,
+            T = self.solver.T,
             V=self.V,
             show=show,
             strname=self.agent_name,
@@ -255,7 +256,7 @@ class Agent:
             # decide whether to continue
             if calc_theta_v:
                 if (diff_L2_norm_theta_e < self.tol) and (
-                    diff_L2_norm_theta_v < 3 * self.tol
+                    diff_L2_norm_theta_v < 5 * self.tol
                 ):
                     if t >= self.miniter:
                         break
