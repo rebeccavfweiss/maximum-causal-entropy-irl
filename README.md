@@ -10,7 +10,7 @@ For our experiment, we use a grid world scenario. The agent starts in a specifie
 
 Below we display the specific grid configuration for this experiment.
 
-![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/grid.jpg)
+![Grid world set up for the experiment. The starting state is green, the target state is orange. The diamonds, triangles and squares are the items that can be collected.](plots/simple_environment/grid.jpg)
 
 The feature mappings are such that:
 - empty states: $[0,0,1]$
@@ -22,7 +22,7 @@ The feature mappings are such that:
 ### Different Policies, different variances
 In this setting, multiple policies can achieve the same feature expectations but have different feature variances. We consider a subset of possible paths depicted below.
 
-![Three possible paths in the grid world.](plots/paths.jpg)
+![Three possible paths in the grid world.](plots/simple_environment/paths.jpg)
 
 Using $\gamma = 1$ we can see that the following policies have the same feature expectation count but different variances:
 
@@ -34,7 +34,7 @@ Using $\gamma = 1$ we can see that the following policies have the same feature 
 
 The demonstrator uses the real reward parameters $[1,1,-2]$ and policy $\pi_1$.
 
-![Reward function of the demonstrator](plots/Demonstrator_reward.jpg)
+![Reward function of the demonstrator](plots/simple_environment/Demonstrator_reward.jpg)
 
 ## Evaluation
 
@@ -46,9 +46,9 @@ To compare the performance of feature variance matching with the original featur
 
 Thus, both algorithms achieve the best possible reward up to rounding errors. However, comparing the policies only the agent using variance matching is able to learn the desired behavior. Note, that we ran the experiment with a finite horizon $T=20$.
 
-![Policy of the agent using only feature expectation matching](plots/Agent%20Expectation_policy.jpg)
+![Policy of the agent using only feature expectation matching](plots/simple_environment/Agent%20Expectation_policy.jpg)
 
-![Policy of the agent using both feature expectation and variance matching](plots/Agent%20Variance_policy.jpg)
+![Policy of the agent using both feature expectation and variance matching](plots/simple_environment/Agent%20Variance_policy.jpg)
 
 
 
