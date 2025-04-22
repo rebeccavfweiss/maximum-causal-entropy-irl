@@ -171,7 +171,7 @@ class MiniGridCrossingEnvironment(GymEnvironment):
         feature_matrix = np.zeros((self.n_states, 6))
         grid = self.env.env.grid
 
-        for n in range(self.n_states):
+        for n in range(self.n_states-1):
             x, y, _ = self.env.from_state_index(n)
             feature_matrix[n][0] = abs(x - self.env.goal_position[0]) / self.env.width
             feature_matrix[n][1] = abs(y - self.env.goal_position[1]) / self.env.height
@@ -217,7 +217,8 @@ class MiniGridCrossingEnvironment(GymEnvironment):
         terminal_states = []
 
         grid_size = self.env.width * self.env.height
-        self.n_states = grid_size * self.n_orientations
+        # add terminal state for computations in which agent infinitely stays once it reached its goal
+        self.n_states = grid_size * self.n_orientations + 1
 
         # Transition matrix of shape (state_space, state_space, action)
         transition_matrix = np.zeros((self.n_states, self.n_states, self.n_actions))
@@ -248,8 +249,16 @@ class MiniGridCrossingEnvironment(GymEnvironment):
                         # Update the transition matrix
                         transition_matrix[current_state, next_state, action] += 1.0
 
-                        if done:
+                        if done or (list(next_pos) == self.env.goal_position):
                             terminal_states.append(next_state)
+
+        #all terminal states can only reach the absorbing state
+        for s in set(terminal_states):
+            transition_matrix[s,:,:] = 0.0
+            transition_matrix[s, self.n_states-1, :] = 1.0
+
+        #agent cannot leave absorbing state
+        transition_matrix[self.n_states-1,self.n_states-1,:] = 1.0
 
         return transition_matrix, terminal_states
 
