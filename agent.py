@@ -56,20 +56,20 @@ class Agent:
 
     def compute_and_draw(
         self, show: bool = False, store: bool = False, fignum: int = 0
-    ):
+    ) -> None:
         """
         computes soft_value iteration for given thetas and policy based on the result and draws policy
 
         Parameters
         ----------
         show : bool
-            whether or not the plots should be shown (default = False)
+            whether or not the plots should be shown
         store : bool
-            whether or not the plots should be stored (default = False)
+            whether or not the plots should be stored
         fignum : int
-            identifier number for figure (default = 0)
+            identifier number for figure
         """
-        self.reward = self.get_reward_for_given_thetas()
+        self.reward = self.get_linear_reward_for_given_thetas()
         self.variance = self.get_variance_for_given_thetas()
         _, _, pi_agent = self.solver.soft_value_iteration(
             self.env, dict(reward=self.reward, variance=self.variance)
@@ -79,16 +79,21 @@ class Agent:
         self.V = self.solver.compute_value_function_bellmann_averaged(
             self.env,
             self.pi,
-            dict(
-                reward=self.env.reward
-            ),
+            dict(reward=self.env.reward),
         )  # compute the value function w.r.t to true reward parameters
 
-        self.env.draw(
-            self.V, self.pi, self.reward, show, self.agent_name, fignum, store
+        self.env.render(
+            pi=self.pi,
+            reward=self.reward,
+            T = self.solver.T,
+            V=self.V,
+            show=show,
+            strname=self.agent_name,
+            fignum=fignum,
+            store=store,
         )
 
-    def get_reward_for_given_thetas(self):
+    def get_linear_reward_for_given_thetas(self) -> np.ndarray:
         """
         computes the reward based on theta_e for every state
 
@@ -99,7 +104,7 @@ class Agent:
 
         return self.env.get_reward_for_given_theta(self.theta_e)
 
-    def get_variance_for_given_thetas(self):
+    def get_variance_for_given_thetas(self) -> np.ndarray:
         """
         computes the variance term for every state needed for soft value iteration based on theta_v
 
@@ -110,7 +115,7 @@ class Agent:
 
         return self.env.get_variance_for_given_theta(self.theta_v)
 
-    def get_mu_soft(self):
+    def get_mu_soft(self) -> tuple[np.ndarray, np.ndarray]:
         """
         computes feature expectation and variance terms based on soft value iteration and computing the corresponding value function
 
@@ -118,7 +123,7 @@ class Agent:
         -------
         feature expectation and variance, once restricted to the reward features, once the full arrays
         """
-        reward_agent = self.get_reward_for_given_thetas()
+        reward_agent = self.get_linear_reward_for_given_thetas()
         variance_agent = self.get_variance_for_given_thetas()
         _, _, pi_s = self.solver.soft_value_iteration(
             self.env, dict(reward=reward_agent, variance=variance_agent)
@@ -129,7 +134,7 @@ class Agent:
             nu,
         )
 
-    def batch_MCE(self, verbose: bool = True):
+    def batch_MCE(self, verbose: bool = True) -> tuple[int, list[float]]:
         """
         implementation of Algorithm 1
 
@@ -241,7 +246,7 @@ class Agent:
 
             end = time()
 
-            runtime.append(end-start)
+            runtime.append(end - start)
 
             if verbose:
                 print("...diff_L2_norm_theta_e=", diff_L2_norm_theta_e)
@@ -251,7 +256,7 @@ class Agent:
             # decide whether to continue
             if calc_theta_v:
                 if (diff_L2_norm_theta_e < self.tol) and (
-                    diff_L2_norm_theta_v < 3 * self.tol
+                    diff_L2_norm_theta_v < 5 * self.tol
                 ):
                     if t >= self.miniter:
                         break
