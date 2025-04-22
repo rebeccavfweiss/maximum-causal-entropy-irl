@@ -213,84 +213,88 @@ class GymDemonstrator(Demonstrator):
 
         if lava_states[0][0] == lava_states[1][0]:
             # x coordinate of the lava are the same -> vertical line
-            lava_y = list( map(itemgetter(1), lava_states ))
+            lava_y = list(map(itemgetter(1), lava_states))
 
-            for i in range(1,self.env.height-1):
+            for i in range(1, self.env.height - 1):
                 if i not in lava_y:
                     hole_y = i
 
-            state = [1,1,0]
-            state_index = self.env.env.to_state_index(*state)
-            #orient downward
-            pi_s[0,state_index,1] = 1.0
-            
-            for y in range(1,hole_y):
-                state = [1, y, 1]
+            if hole_y != 1:
+                state = [1, 1, 0]
                 state_index = self.env.env.to_state_index(*state)
-                # move forward in these states
-                pi_s[0,state_index, 2] = 1.0
+                # orient downward
+                pi_s[0, state_index, 1] = 1.0
 
-            state = [1,hole_y,1]
-            state_index = self.env.env.to_state_index(*state)
-            #orient to the right
-            pi_s[0,state_index,0] = 1.0
+                for y in range(1, hole_y):
+                    state = [1, y, 1]
+                    state_index = self.env.env.to_state_index(*state)
+                    # move forward in these states
+                    pi_s[0, state_index, 2] = 1.0
 
-            for x in range(1, self.env.width-2):
+                state = [1, hole_y, 1]
+                state_index = self.env.env.to_state_index(*state)
+                # orient to the right
+                pi_s[0, state_index, 0] = 1.0
+
+            for x in range(1, self.env.width - 2):
                 state = [x, hole_y, 0]
                 state_index = self.env.env.to_state_index(*state)
                 # move forward in these states
-                pi_s[0,state_index, 2] = 1.0
+                pi_s[0, state_index, 2] = 1.0
 
-            state = [self.env.width-2,hole_y,0]
-            state_index = self.env.env.to_state_index(*state)
-            #orient downward
-            pi_s[0,state_index,1] = 1.0
-
-            for y in range(hole_y, self.env.height-2):
-                state = [self.env.width-2, y, 1]
+            if hole_y != self.env.height - 2:
+                state = [self.env.width - 2, hole_y, 0]
                 state_index = self.env.env.to_state_index(*state)
-                # move forward in these states
-                pi_s[0,state_index, 2] = 1.0   
+                # orient downward
+                pi_s[0, state_index, 1] = 1.0
 
+                for y in range(hole_y, self.env.height - 2):
+                    state = [self.env.width - 2, y, 1]
+                    state_index = self.env.env.to_state_index(*state)
+                    # move forward in these states
+                    pi_s[0, state_index, 2] = 1.0
 
         else:
             # y coordinate of the lava are the same -> horizontal line
-            lava_x = list( map(itemgetter(0), lava_states ))
+            lava_x = list(map(itemgetter(0), lava_states))
 
-            for i in range(1,self.env.width-1):
+            for i in range(1, self.env.width - 1):
                 if i not in lava_x:
                     hole_x = i
-            
-            for x in range(1,hole_x):
-                state = [x, 1, 0]
-                state_index = self.env.env.to_state_index(*state)
-                # move forward in these states
-                pi_s[0,state_index, 2] = 1.0
 
-            state = [hole_x,1,0]
+            if hole_x != 1:
+                for x in range(1, hole_x):
+                    state = [x, 1, 0]
+                    state_index = self.env.env.to_state_index(*state)
+                    # move forward in these states
+                    pi_s[0, state_index, 2] = 1.0
+
+            state = [hole_x, 1, 0]
             state_index = self.env.env.to_state_index(*state)
-            #orient downward
-            pi_s[0,state_index,1] = 1.0
+            # orient downward
+            pi_s[0, state_index, 1] = 1.0
 
-            for y in range(1, self.env.height-2):
+            for y in range(1, self.env.height - 2):
                 state = [hole_x, y, 1]
                 state_index = self.env.env.to_state_index(*state)
                 # move forward in these states
-                pi_s[0,state_index, 2] = 1.0
+                pi_s[0, state_index, 2] = 1.0
 
-            state = [hole_x,self.env.height-2, 1]
+            state = [hole_x, self.env.height - 2, 1]
             state_index = self.env.env.to_state_index(*state)
-            #orient to the right
-            pi_s[0,state_index,0] = 1.0
 
-            for x in range(hole_x, self.env.width-2):
-                state = [x, self.env.height-2, 0]
-                state_index = self.env.env.to_state_index(*state)
-                # move forward in these states
-                pi_s[0,state_index, 2] = 1.0  
+            if hole_x != self.env.width - 2:
+                # orient to the right
+                pi_s[0, state_index, 0] = 1.0
 
-        for t in range(1,self.T):
-            #time independent policy
+                for x in range(hole_x, self.env.width - 2):
+                    state = [x, self.env.height - 2, 0]
+                    state_index = self.env.env.to_state_index(*state)
+                    # move forward in these states
+                    pi_s[0, state_index, 2] = 1.0
+
+        for t in range(1, self.T):
+            # time independent policy
             pi_s[t] = pi_s[0]
 
         return pi_s
