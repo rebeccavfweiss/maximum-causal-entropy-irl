@@ -22,13 +22,17 @@ class Demonstrator(ABC):
         finite horizon value for the MDP solver
     gamma : float
         reward discount factor
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
     """
 
     def __init__(
-        self, env: Environment, demonstrator_name: str, T: int = 45, gamma: float = 1.0
+        self, env: Environment, demonstrator_name: str, T: int = 45, gamma: float = 1.0, n_trajectories: int = 1
     ):
         self.V = None
         self.pi = None
+        self.trajectories = None
+        self.n_trajectories = n_trajectories
         self.reward = None
         self.env = env
         self.demonstrator_name = demonstrator_name
@@ -50,42 +54,12 @@ class Demonstrator(ABC):
         feature expectation and variance arrays
         """
 
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, self.pi)
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, self.pi, self.trajectories)
 
         return (
             mu,
             nu,
         )
-
-    def _compute_value_function(self, pi: np.ndarray) -> np.ndarray:
-        """
-        Computes the state-dependent value function based on the given policy
-
-        Parameters
-        ----------
-        pi : ndarray
-            policy to use
-
-        Returns
-        -------
-        ndarray
-            matrix containing the time-dependent value function
-        """
-        V = np.zeros((self.T + 1, self.env.n_states))
-
-        for t in range(self.T - 1, -1, -1):
-            for s in range(self.env.n_states):
-                V[t, s] = sum(
-                    pi[t, s, a]
-                    * sum(
-                        self.env.T_matrix[s, s_prime, a]
-                        * (self.env.reward[s] + self.env.gamma * V[t + 1, s_prime])
-                        for s_prime in range(self.env.n_states)
-                    )
-                    for a in range(self.env.n_actions)
-                )
-
-        return V
 
     def draw(self, show: bool = False, store: bool = False, fignum: int = 0) -> None:
         """
@@ -129,6 +103,8 @@ class SimpleDemonstrator(Demonstrator):
         finite horizon value for the MDP solver
     gamma : float
         reward discount factor
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
     """
 
     def __init__(
@@ -137,12 +113,43 @@ class SimpleDemonstrator(Demonstrator):
         demonstrator_name: str,
         T: int = 45,
         gamma: float = 1.0,
+        n_trajectories: int = 1
     ):
-        super().__init__(env, demonstrator_name, T, gamma)
+        super().__init__(env, demonstrator_name, T, gamma, n_trajectories)
 
         self.pi = self._define_policy()
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
+
+    def _compute_value_function(self, pi: np.ndarray) -> np.ndarray:
+        """
+        Computes the state-dependent value function based on the given policy
+
+        Parameters
+        ----------
+        pi : ndarray
+            policy to use
+
+        Returns
+        -------
+        ndarray
+            matrix containing the time-dependent value function
+        """
+        V = np.zeros((self.T + 1, self.env.n_states))
+
+        for t in range(self.T - 1, -1, -1):
+            for s in range(self.env.n_states):
+                V[t, s] = sum(
+                    pi[t, s, a]
+                    * sum(
+                        self.env.T_matrix[s, s_prime, a]
+                        * (self.env.reward[s] + self.env.gamma * V[t + 1, s_prime])
+                        for s_prime in range(self.env.n_states)
+                    )
+                    for a in range(self.env.n_actions)
+                )
+
+        return V
 
     def _define_policy(self):
         """
@@ -187,10 +194,8 @@ class GymDemonstrator(Demonstrator):
         finite horizon value for the MDP solver
     gamma : float
         reward discount factor
-    learning_rate : float
-        learning rate for training
-    n_training_episodes : int
-        number of episodes for training
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
     """
 
     def __init__(
@@ -199,14 +204,15 @@ class GymDemonstrator(Demonstrator):
         demonstrator_name: str,
         T: int = 45,
         gamma: float = 1.0,
+        n_trajectories: int = 1
     ):
-        super().__init__(env, demonstrator_name, T, gamma)
+        super().__init__(env, demonstrator_name, T, gamma, n_trajectories)
 
         self.pi = self._define_policy()
+        self.trajectories = [self.solver.generate_episode(self.env, self.pi,self.T)[0]]
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def _define_policy(self):
-        # TODO generalize to more than one hole (for now assumption only one)
         pi_s = np.zeros((self.T, self.env.n_states, self.env.n_actions))
 
         lava_states = self.env.env.forbidden_states
