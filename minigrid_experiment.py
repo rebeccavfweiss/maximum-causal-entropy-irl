@@ -1,23 +1,11 @@
 import agent
 import demonstrator
-from simple_environment import SimpleEnvironment
 from gymnasium_environment import MiniGridCrossingEnvironment
 import MDPSolver
 import numpy as np
 import pandas as pd
 from random import randint
 
-
-def create_simple_env():
-
-    config_env = {
-        "theta": [1.0, 1.0, -2.0],
-        "gamma": 1.0,
-    }
-
-    env = SimpleEnvironment(config_env)
-
-    return env
 
 
 def create_minigrid_env(grid_size:int = 9):
@@ -28,7 +16,7 @@ def create_minigrid_env(grid_size:int = 9):
         "env_name": "MiniGrid-LavaCrossingS9N1-v0",
         "render_mode": "rgb_array",
         "grid_size": grid_size,
-        "seed": 1#randint(1, 100),
+        "seed": randint(1, 100),
     }
 
     env = MiniGridCrossingEnvironment(config_env)
@@ -63,7 +51,6 @@ if __name__ == "__main__":
             for i in range(runs):
 
                 # create the environment
-                # env = create_simple_env()
                 env = create_minigrid_env(grid_size)
 
                 print("T = ", T)
@@ -75,7 +62,6 @@ if __name__ == "__main__":
                 config_default_learner = create_config_learner()
 
                 # create demonstrator
-                # demo = demonstrator.SimpleDemonstrator(env, demonstrator_name="SimpleDemonstrator", T=T)
                 demo = demonstrator.GymDemonstrator(
                     env,
                     demonstrator_name="GymDemonstrator",
