@@ -28,7 +28,7 @@ def create_minigrid_env(grid_size:int = 9):
         "env_name": "MiniGrid-LavaCrossingS9N1-v0",
         "render_mode": "rgb_array",
         "grid_size": grid_size,
-        "seed": randint(1, 100),
+        "seed": 1#randint(1, 100),
     }
 
     env = MiniGridCrossingEnvironment(config_env)
@@ -36,7 +36,7 @@ def create_minigrid_env(grid_size:int = 9):
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 5000}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 400}
 
     return config_default_learner
 
@@ -44,13 +44,14 @@ def create_config_learner():
 if __name__ == "__main__":
 
     show = False
-    store = False
+    store = True
     verbose = False
 
     
-    grid_sizes = [2*i + 1 for i in range(2,8)]
-    horizons =[2*s + 2 for s in grid_sizes] + [50,100]
-    runs = 5
+    grid_sizes = [5] #[2*i + 1 for i in range(4,6)]
+    horizons = [11] #[2*s + 2 for s in grid_sizes]
+    runs = 1
+    n_trajectories = 1
 
     results = []
 
@@ -87,9 +88,7 @@ if __name__ == "__main__":
                 if verbose:
                     print("Demonstrator done")
 
-                reward_demonstrator = np.dot(
-                    env.reward, demo.solver.compute_feature_SVF_bellmann(env, demo.pi)[0]
-                )
+                reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)
 
                 # create agent that uses only expectation matching
                 agent_expectation = agent.Agent(
@@ -101,12 +100,7 @@ if __name__ == "__main__":
                 )
                 iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
                 agent_expectation.compute_and_draw(show, store, 2)
-                reward_expectation = np.dot(
-                    env.reward,
-                    agent_expectation.solver.compute_feature_SVF_bellmann(
-                        env, agent_expectation.pi
-                    )[0],
-                )
+                reward_expectation = env.compute_true_reward_for_agent(agent_expectation, n_trajectories, T)
 
                 if verbose:
                     print("First agent done")
@@ -149,10 +143,7 @@ if __name__ == "__main__":
                 )
                 iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
                 agent_variance.compute_and_draw(show, store, 4)
-                reward_variance = np.dot(
-                    env.reward,
-                    agent_variance.solver.compute_feature_SVF_bellmann(env, agent_variance.pi)[0],
-                )
+                reward_variance = env.compute_true_reward_for_agent(agent_variance, n_trajectories, T)
 
                 if verbose:
                     print("Second agent done")
