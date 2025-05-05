@@ -122,7 +122,6 @@ class Environment(ABC):
             a = agent.solver.compute_feature_SVF_bellmann(
                             self, agent.pi
                         )[0]
-            print(np.nonzero(a)[0].tolist())
 
             return np.dot(
                         self.reward,
@@ -136,7 +135,6 @@ class Environment(ABC):
             rewards = []
             for i in range(n_trajectories):
                 trajectory = agent.solver.generate_episode(self, agent.pi, T)[0]
-                print([i[0] for i in trajectory])
 
                 rewards.append(sum([trajectory[j][3]*self.gamma**j for j in range(len(trajectory))]))
             return np.mean(rewards)
