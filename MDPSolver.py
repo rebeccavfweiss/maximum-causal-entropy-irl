@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import copy
 from scipy import sparse
 from environment import Environment
+from policy import Policy
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
@@ -51,7 +52,7 @@ class MDPSolver(ABC):
     def generate_episode(
         self,
         env: Environment,
-        policy: np.ndarray,
+        policy: Policy,
         len_episode: int,
     ) -> tuple[list[tuple[int, int, int, float]], np.ndarray]:
         """
@@ -62,7 +63,7 @@ class MDPSolver(ABC):
         env : environment.Environment
             the environment representing the setting of the problem
         policy : ndarray
-            policy to use
+            policy to use (must be stochastic)
         len_episode : int
             episode length
 
@@ -74,56 +75,22 @@ class MDPSolver(ABC):
             discounted state visitation counts for one trajectory
         """
 
-        # check policy, if its deterministic convert to stochastic
-        if len(policy.shape) == 2:
-            changed_policy = self.convert_det_to_stochastic_policy(env, policy)
-        else:
-            changed_policy = policy
-
         state_counts_gamma = np.zeros(env.n_states)
         # Selecting a start state according to InitD
         state = env.reset()
-
 
         episode = []
         for t in range(len_episode):
             state_counts_gamma[state] += env.gamma**t
             if (state in env.terminal_states) or (t == self.T):
                 break
-            probs = changed_policy[t, state]
-            action = int(np.random.choice(np.arange(len(probs)), p=probs))
+            action = policy.predict(state, t)
             next_state, reward, _, _ = env.step(action)
             episode.append((state, action, next_state, reward))
             state = next_state
 
         return episode, state_counts_gamma
 
-    def convert_det_to_stochastic_policy(
-        self, env: Environment, deterministicPolicy
-    ) -> np.ndarray:
-        """
-        converts a deterministic policy to a stochastic one
-
-        Parameters
-        ----------
-        env : environment.Environment
-            the environment representing the setting of the problem
-        deterministicPolicy
-            policy to convert (time dependent)
-
-        Returns
-        -------
-        stochasticPolicy : ndarray
-            converted policy
-        """
-
-        stochasticPolicy = np.zeros((self.T, env.n_states, env.n_actions))
-
-        for t in range(self.T):
-            for i in range(env.n_states):
-                stochasticPolicy[t][i][deterministicPolicy[t, i]] = 1.0
-
-        return stochasticPolicy
 
     def get_T_pi(self, env: Environment, policy: np.ndarray) -> np.ndarray:
         """
@@ -170,7 +137,6 @@ class MDPSolver(ABC):
         T_pi = np.zeros((self.T, env.n_states, env.n_states))
 
         length = min(len(trajectory), self.T)
-        print(trajectory)
 
         for i in range(length):
             T_pi[i,trajectory[i][0], trajectory[i][2]] = 1.0
@@ -203,11 +169,8 @@ class MDPSolver(ABC):
         assert((policy is not None) or (trajectories is not None)), "At least policy or some trajectory must be given"
 
         # To ensure stochastic behaviour in the feature expectation and state-visitation frequencies (run num_iter times)
-        # But, if input policy is deterministic, set num_iter = 1
         if trajectories is not None:
             num_iter = len(trajectories)
-        elif len(policy.shape) == 2:
-            num_iter = 1
         elif num_iter == None:
             num_iter = 1
 
@@ -257,17 +220,9 @@ class MDPSolver(ABC):
         assert((policy is not None) or (trajectory is not None)), "At least policy or some trajectory must be given"
 
         if trajectory is None:
-            # ensure stochastic policy
-
-            if len(policy.shape) == 2:
-                changed_policy = self.convert_det_to_stochastic_policy(env, policy)
-            else:
-                changed_policy = policy
-
             # Creating a T matrix for the policy
-            T_pi = self.get_T_pi(env, changed_policy)
+            T_pi = self.get_T_pi(env, policy)
         else: 
-            print("using trajectory")
             T_pi = self.get_T_pi_from_trajectory(env, trajectory)
 
         for s in env.terminal_states:
@@ -333,11 +288,6 @@ class MDPSolver(ABC):
         V_list : ndarray
             mean value function
         """
-        # To ensure stochastic behavior, run it multiple times and take an expectation
-        # But, if policy is deterministic set num_iter to 1
-        if len(policy.shape) == 2:
-            num_iter = 1
-
         if num_iter == None:
             num_iter = 1
 
@@ -369,13 +319,7 @@ class MDPSolver(ABC):
             value function
         """
 
-        # check if policy is deterministic or stochastic
-        if len(policy.shape) == 2:
-            changed_policy = self.convert_det_to_stochastic_policy(env, policy)
-        else:
-            changed_policy = policy
-
-        T_pi = self.get_T_pi(env, changed_policy)
+        T_pi = self.get_T_pi(env, policy)
 
         T_pi_sparse = [sparse.csr_matrix(T_pi[t]) for t in range(self.T)]
 
