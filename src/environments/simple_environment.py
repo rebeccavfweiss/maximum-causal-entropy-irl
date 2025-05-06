@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from policy import Policy
 import copy
 import os
-from environment import Environment
+from environments.environment import Environment
 
 class SimpleEnvironment(Environment):
     """
@@ -145,7 +146,7 @@ class SimpleEnvironment(Environment):
 
     def render(
         self,
-        pi:np.ndarray,
+        policy:Policy,
         T:int = 20,
         store: bool = False,  
         reward:np.ndarray = None,
@@ -181,7 +182,7 @@ class SimpleEnvironment(Environment):
 
         reward = reward[:-1]
         V = V[:,:-1]
-        pi = pi[:-1]
+        pi = policy.pi[:-1]
 
 
         reshaped_reward = copy.deepcopy(reward.reshape((self.width, self.height)))
@@ -192,7 +193,7 @@ class SimpleEnvironment(Environment):
         if show:
             plt.show()
         if store:
-            plt.savefig(f"plots\{strname}_reward.jpg", format="jpg")
+            plt.savefig(f"plots\simple_environment\{strname}_reward.jpg", format="jpg")
 
         if V is not None:
 

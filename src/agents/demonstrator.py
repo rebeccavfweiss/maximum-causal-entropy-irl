@@ -1,14 +1,16 @@
 import MDPSolver
-from environment import Environment
-from simple_environment import SimpleEnvironment
-from gymnasium_environment import GymEnvironment
+from environments.environment import Environment
+from environments.simple_environment import SimpleEnvironment
+from environments.minigrid_environment import MinigridEnvironment
+from policy import TabularPolicy
 from abc import ABC, abstractmethod
+from agents.agent import Agent
 import copy
 import numpy as np
 from operator import itemgetter
 
 
-class Demonstrator(ABC):
+class Demonstrator(Agent):
     """
     Abstract demonstrator class to generalize demonstrators in different environments
 
@@ -20,22 +22,27 @@ class Demonstrator(ABC):
         name of the demonstrator
     T : int
         finite horizon value for the MDP solver
-    gamma : float
-        reward discount factor
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
     """
 
     def __init__(
-        self, env: Environment, demonstrator_name: str, T: int = 45, gamma: float = 1.0
-    ):
-        self.V = None
-        self.pi = None
-        self.reward = None
-        self.env = env
-        self.demonstrator_name = demonstrator_name
+        self,
+        env: Environment,
+        demonstrator_name: str,
+        T: int = 45,
+        n_trajectories: int = None,
+    ):  
+        super().__init__(env, demonstrator_name)
         self.T = T
-        self.gamma = gamma
+        self.V = None
+        self.policy = None
+        self.trajectories = None
+        self.n_trajectories = n_trajectories
+        self.reward = None
         self.solver = MDPSolver.MDPSolverExpectation(T, compute_variance=True)
         self.mu_demonstrator = None
+        self.reward = copy.deepcopy(self.env.reward)
 
     @abstractmethod
     def _define_policy(self):
@@ -49,13 +56,47 @@ class Demonstrator(ABC):
         -------
         feature expectation and variance arrays
         """
-
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, self.pi)
+        # TODO make MDP solver work with policies not the raw tables
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(
+            self.env, self.policy.pi, self.trajectories
+        )
 
         return (
             mu,
             nu,
         )
+
+    
+
+class SimpleDemonstrator(Demonstrator):
+    """
+    class to implement the demonstrator that computes its policy for a certain reward using value iteration
+    policy is hard coded
+
+    Parameters
+    ----------
+    env : environment.Environment
+        the environment representing the setting of the problem
+    demonstrator_name : str
+        name of the demonstrator
+    T : int
+        finite horizon value for the MDP solver
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
+    """
+
+    def __init__(
+        self,
+        env: SimpleEnvironment,
+        demonstrator_name: str,
+        T: int = 45,
+        n_trajectories: int = 1,
+    ):
+        super().__init__(env, demonstrator_name, T, n_trajectories)
+
+        self.policy = TabularPolicy(self._define_policy())
+
+        self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def _compute_value_function(self, pi: np.ndarray) -> np.ndarray:
         """
@@ -86,63 +127,6 @@ class Demonstrator(ABC):
                 )
 
         return V
-
-    def draw(self, show: bool = False, store: bool = False, fignum: int = 0) -> None:
-        """
-        draws the policy of the demonstrator as long as it has been computed before, else a warning is thrown
-
-        Parameters
-        ----------
-        show : bool
-            whether or not the plot should be shown
-        store : bool
-            whether or not the plot should be stored
-        fignum : int
-            identifier number for the figure
-        """
-
-        self.reward = copy.deepcopy(self.env.reward)
-        self.env.render(
-            V=self.V,
-            pi=self.pi,
-            reward=self.reward,
-            show=show,
-            strname=self.demonstrator_name,
-            fignum=fignum,
-            store=store,
-            T=self.T,
-        )
-
-
-class SimpleDemonstrator(Demonstrator):
-    """
-    class to implement the demonstrator that computes its policy for a certain reward using value iteration
-    policy is hard coded
-
-    Parameters
-    ----------
-    env : environment.Environment
-        the environment representing the setting of the problem
-    demonstrator_name : str
-        name of the demonstrator
-    T : int
-        finite horizon value for the MDP solver
-    gamma : float
-        reward discount factor
-    """
-
-    def __init__(
-        self,
-        env: SimpleEnvironment,
-        demonstrator_name: str,
-        T: int = 45,
-        gamma: float = 1.0,
-    ):
-        super().__init__(env, demonstrator_name, T, gamma)
-
-        self.pi = self._define_policy()
-
-        self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def _define_policy(self):
         """
@@ -187,26 +171,26 @@ class GymDemonstrator(Demonstrator):
         finite horizon value for the MDP solver
     gamma : float
         reward discount factor
-    learning_rate : float
-        learning rate for training
-    n_training_episodes : int
-        number of episodes for training
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
     """
 
     def __init__(
         self,
-        env: GymEnvironment,
+        env: MinigridEnvironment,
         demonstrator_name: str,
         T: int = 45,
-        gamma: float = 1.0,
+        n_trajectories: int = 1,
     ):
-        super().__init__(env, demonstrator_name, T, gamma)
+        super().__init__(env, demonstrator_name, T, n_trajectories)
 
-        self.pi = self._define_policy()
+        self.policy = TabularPolicy(self._define_policy())
+        self.trajectories = [
+            self.solver.generate_episode(self.env, self.policy, self.T)[0]
+        ]
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def _define_policy(self):
-        # TODO generalize to more than one hole (for now assumption only one)
         pi_s = np.zeros((self.T, self.env.n_states, self.env.n_actions))
 
         lava_states = self.env.env.forbidden_states

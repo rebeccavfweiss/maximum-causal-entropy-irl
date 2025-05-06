@@ -1,13 +1,15 @@
 import MDPSolver
 import numpy as np
 import copy
-from environment import Environment
+from environments.environment import Environment
+from policy import TabularPolicy
+from agents.agent import Agent
 from time import time
 
 _largenum = 1000000
 
 
-class Agent:
+class Learner(Agent):
     """
     Implementing an agent using either expectation matching / expectation and variance matching to solve an IRL problem.
 
@@ -48,9 +50,10 @@ class Agent:
         self.theta_upperBound = _largenum
 
         self.V = None
-        self.pi = None
+        self.policy = None
         self.reward = None
         self.solver = solver
+        self.T = self.solver.T
 
         self.agent_name = agent_name
 
@@ -69,31 +72,36 @@ class Agent:
         fignum : int
             identifier number for figure
         """
-        self.reward = self.get_linear_reward_for_given_thetas()
-        self.variance = self.get_variance_for_given_thetas()
-        _, _, pi_agent = self.solver.soft_value_iteration(
-            self.env, dict(reward=self.reward, variance=self.variance)
-        )
-        self.pi = pi_agent
+        pi_agent = self.compute_policy()
+        self.policy = TabularPolicy(pi_agent)
 
         self.V = self.solver.compute_value_function_bellmann_averaged(
             self.env,
-            self.pi,
+            self.policy.pi,
             dict(reward=self.env.reward),
         )  # compute the value function w.r.t to true reward parameters
 
-        self.env.render(
-            pi=self.pi,
-            reward=self.reward,
-            T = self.solver.T,
-            V=self.V,
-            show=show,
-            strname=self.agent_name,
-            fignum=fignum,
-            store=store,
-        )
+        self.draw(show, store, fignum)
 
-    def get_linear_reward_for_given_thetas(self) -> np.ndarray:
+    def compute_policy(self):
+        """
+        Helper function to compute policy via SVI for the given reward parameters
+
+        Returns
+        -------
+        pi_agent : ndarray
+            tabular policy
+        """
+        self.reward = self.get_linear_reward()
+        self.variance = self.get_variance()
+        _, _, pi_agent = self.solver.soft_value_iteration(
+            self.env, dict(reward=self.reward, variance=self.variance)
+        )
+        
+        return pi_agent
+
+
+    def get_linear_reward(self) -> np.ndarray:
         """
         computes the reward based on theta_e for every state
 
@@ -104,7 +112,7 @@ class Agent:
 
         return self.env.get_reward_for_given_theta(self.theta_e)
 
-    def get_variance_for_given_thetas(self) -> np.ndarray:
+    def get_variance(self) -> np.ndarray:
         """
         computes the variance term for every state needed for soft value iteration based on theta_v
 
@@ -123,12 +131,8 @@ class Agent:
         -------
         feature expectation and variance, once restricted to the reward features, once the full arrays
         """
-        reward_agent = self.get_linear_reward_for_given_thetas()
-        variance_agent = self.get_variance_for_given_thetas()
-        _, _, pi_s = self.solver.soft_value_iteration(
-            self.env, dict(reward=reward_agent, variance=variance_agent)
-        )
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_s)
+        pi_agent = self.compute_policy()
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_agent)
         return (
             mu,
             nu,

@@ -2,11 +2,12 @@ import numpy as np
 from abc import abstractmethod
 import gymnasium as gym
 import minigrid
+from policy import Policy
 import imageio
-from environment import Environment
+from environments.environment import Environment
 
 
-class GymEnvironment(Environment):
+class MinigridEnvironment(Environment):
     """
     Environment class exposing desired functionality from gymnasium.Environments and adding necessary information for training in these environments
 
@@ -86,7 +87,7 @@ class GymEnvironment(Environment):
         return new_state, reward, terminated, truncated
 
     def render(
-        self, pi: np.ndarray, T: int = 20, store:bool=False, strname: str = "", fps: int = 1, **kwargs
+        self, policy: Policy, T: int = 20, store:bool=False, strname: str = "", fps: int = 1, **kwargs
     ) -> None:
         """
         Function to record a video of the given policy in the environment
@@ -105,9 +106,6 @@ class GymEnvironment(Environment):
             frames per second
         """
 
-        def q_learning_policy(pi, state, t):
-            return np.argmax(pi[t, state])
-
         images = []
         terminated = False
         truncated = False
@@ -117,14 +115,14 @@ class GymEnvironment(Environment):
         t = 0
         while (not (terminated or truncated)) and t < T:
             # Take the action (index) that have the maximum expected future reward given that state
-            action = q_learning_policy(pi, state, t)
+            action = policy.predict(state, t)
             state, _, terminated, truncated = self.step(action)
             img = self.env.render()
             images.append(img)
             t += 1
         if store:
             imageio.mimsave(
-                strname + ".mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
+                f"recordings\{strname}.mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
             )
 
     def action_sample(self) -> int:
@@ -143,7 +141,7 @@ class GymEnvironment(Environment):
         pass
 
 
-class MiniGridCrossingEnvironment(GymEnvironment):
+class CrossingMiniGridEnvironment(MinigridEnvironment):
     """
     Class to work specifically with the MiniGrid Crossing environment
 

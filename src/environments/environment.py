@@ -1,6 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from scipy import sparse
+from policy import Policy
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -97,5 +98,44 @@ class Environment(ABC):
         pass
 
     @abstractmethod
-    def render(self, pi, T: int = 20, store:bool=False,**kwargs):
+    def render(self, policy:Policy, T: int = 20, store:bool=False,**kwargs):
         pass
+
+    def compute_true_reward_for_agent(self, agent, n_trajectories:int=None, T:int=None) -> float:
+        """
+        Compute the true reward in the environment either with the given policy or with trajectories
+
+        Parameters
+        ----------
+        agent
+            agent/demonstrator that should be evaluated in the environment
+        n_trajectories : int
+            number of trajectories to use, if None then we use the reward vector
+
+        Returns
+        -------
+        reward : float
+            true reward for the given policy
+        """
+
+        if n_trajectories is None:
+            
+            a = agent.solver.compute_feature_SVF_bellmann(
+                            self, agent.policy.pi
+                        )[0]
+
+            return np.dot(
+                        self.reward,
+                        agent.solver.compute_feature_SVF_bellmann(
+                            self, agent.policy.pi
+                        )[0],
+                    )
+        
+        else:
+            # compute reward based on trajectories
+            rewards = []
+            for i in range(n_trajectories):
+                trajectory = agent.solver.generate_episode(self, agent.policy, T)[0]
+
+                rewards.append(sum([trajectory[j][3]*self.gamma**j for j in range(len(trajectory))]))
+            return np.mean(rewards)
