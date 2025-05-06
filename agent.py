@@ -2,6 +2,7 @@ import MDPSolver
 import numpy as np
 import copy
 from environment import Environment
+from policy import TabularPolicy
 from time import time
 
 _largenum = 1000000
@@ -48,7 +49,7 @@ class Agent:
         self.theta_upperBound = _largenum
 
         self.V = None
-        self.pi = None
+        self.policy = None
         self.reward = None
         self.solver = solver
 
@@ -74,16 +75,16 @@ class Agent:
         _, _, pi_agent = self.solver.soft_value_iteration(
             self.env, dict(reward=self.reward, variance=self.variance)
         )
-        self.pi = pi_agent
+        self.policy = TabularPolicy(pi_agent)
 
         self.V = self.solver.compute_value_function_bellmann_averaged(
             self.env,
-            self.pi,
+            self.policy.pi,
             dict(reward=self.env.reward),
         )  # compute the value function w.r.t to true reward parameters
 
         self.env.render(
-            pi=self.pi,
+            policy=self.policy,
             reward=self.reward,
             T = self.solver.T,
             V=self.V,

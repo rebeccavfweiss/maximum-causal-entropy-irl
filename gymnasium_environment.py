@@ -2,6 +2,7 @@ import numpy as np
 from abc import abstractmethod
 import gymnasium as gym
 import minigrid
+from policy import Policy
 import imageio
 from environment import Environment
 
@@ -86,7 +87,7 @@ class GymEnvironment(Environment):
         return new_state, reward, terminated, truncated
 
     def render(
-        self, pi: np.ndarray, T: int = 20, store:bool=False, strname: str = "", fps: int = 1, **kwargs
+        self, policy: Policy, T: int = 20, store:bool=False, strname: str = "", fps: int = 1, **kwargs
     ) -> None:
         """
         Function to record a video of the given policy in the environment
@@ -105,9 +106,6 @@ class GymEnvironment(Environment):
             frames per second
         """
 
-        def q_learning_policy(pi, state, t):
-            return np.argmax(pi[t, state])
-
         images = []
         terminated = False
         truncated = False
@@ -117,7 +115,7 @@ class GymEnvironment(Environment):
         t = 0
         while (not (terminated or truncated)) and t < T:
             # Take the action (index) that have the maximum expected future reward given that state
-            action = q_learning_policy(pi, state, t)
+            action = policy.predict(state, t)
             state, _, terminated, truncated = self.step(action)
             img = self.env.render()
             images.append(img)

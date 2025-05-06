@@ -1,6 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from scipy import sparse
+from policy import Policy
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -97,7 +98,7 @@ class Environment(ABC):
         pass
 
     @abstractmethod
-    def render(self, pi, T: int = 20, store:bool=False,**kwargs):
+    def render(self, policy:Policy, T: int = 20, store:bool=False,**kwargs):
         pass
 
     def compute_true_reward_for_agent(self, agent, n_trajectories:int=None, T:int=None) -> float:
@@ -120,13 +121,13 @@ class Environment(ABC):
         if n_trajectories is None:
             
             a = agent.solver.compute_feature_SVF_bellmann(
-                            self, agent.pi
+                            self, agent.policy.pi
                         )[0]
 
             return np.dot(
                         self.reward,
                         agent.solver.compute_feature_SVF_bellmann(
-                            self, agent.pi
+                            self, agent.policy.pi
                         )[0],
                     )
         
@@ -134,7 +135,7 @@ class Environment(ABC):
             # compute reward based on trajectories
             rewards = []
             for i in range(n_trajectories):
-                trajectory = agent.solver.generate_episode(self, agent.pi, T)[0]
+                trajectory = agent.solver.generate_episode(self, agent.policy, T)[0]
 
                 rewards.append(sum([trajectory[j][3]*self.gamma**j for j in range(len(trajectory))]))
             return np.mean(rewards)

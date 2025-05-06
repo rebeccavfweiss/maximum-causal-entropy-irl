@@ -2,6 +2,7 @@ import MDPSolver
 from environment import Environment
 from simple_environment import SimpleEnvironment
 from gymnasium_environment import GymEnvironment
+from policy import TabularPolicy
 from abc import ABC, abstractmethod
 import copy
 import numpy as np
@@ -27,10 +28,15 @@ class Demonstrator(ABC):
     """
 
     def __init__(
-        self, env: Environment, demonstrator_name: str, T: int = 45, gamma: float = 1.0, n_trajectories: int = 1
+        self,
+        env: Environment,
+        demonstrator_name: str,
+        T: int = 45,
+        gamma: float = 1.0,
+        n_trajectories: int = None,
     ):
         self.V = None
-        self.pi = None
+        self.policy = None
         self.trajectories = None
         self.n_trajectories = n_trajectories
         self.reward = None
@@ -53,8 +59,10 @@ class Demonstrator(ABC):
         -------
         feature expectation and variance arrays
         """
-
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, self.pi, self.trajectories)
+        # TODO make MDP solver work with policies not the raw tables
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(
+            self.env, self.policy.pi, self.trajectories
+        )
 
         return (
             mu,
@@ -78,7 +86,7 @@ class Demonstrator(ABC):
         self.reward = copy.deepcopy(self.env.reward)
         self.env.render(
             V=self.V,
-            pi=self.pi,
+            policy=self.policy,
             reward=self.reward,
             show=show,
             strname=self.demonstrator_name,
@@ -113,11 +121,11 @@ class SimpleDemonstrator(Demonstrator):
         demonstrator_name: str,
         T: int = 45,
         gamma: float = 1.0,
-        n_trajectories: int = 1
+        n_trajectories: int = 1,
     ):
         super().__init__(env, demonstrator_name, T, gamma, n_trajectories)
 
-        self.pi = self._define_policy()
+        self.policy = TabularPolicy(self._define_policy())
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
@@ -204,12 +212,14 @@ class GymDemonstrator(Demonstrator):
         demonstrator_name: str,
         T: int = 45,
         gamma: float = 1.0,
-        n_trajectories: int = 1
+        n_trajectories: int = 1,
     ):
         super().__init__(env, demonstrator_name, T, gamma, n_trajectories)
 
-        self.pi = self._define_policy()
-        self.trajectories = [self.solver.generate_episode(self.env, self.pi,self.T)[0]]
+        self.policy = TabularPolicy(self._define_policy())
+        self.trajectories = [
+            self.solver.generate_episode(self.env, self.policy, self.T)[0]
+        ]
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def _define_policy(self):
