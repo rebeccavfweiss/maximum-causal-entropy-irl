@@ -1,11 +1,14 @@
-import MDPSolver
+import MDP_solver
+from MDP_solver_exact import MDPSolverExactExpectation
+from MDP_solver_approximation import MDPSolverApproximation
 from environments.environment import Environment
 from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
-from policy import TabularPolicy
-from abc import ABC, abstractmethod
+from policy import TabularPolicy, ModelPolicy
+from abc import abstractmethod
 from agents.agent import Agent
-import copy
+from stable_baselines3 import PPO
+import os
 import numpy as np
 from operator import itemgetter
 
@@ -24,6 +27,8 @@ class Demonstrator(Agent):
         finite horizon value for the MDP solver
     n_trajectories : int
         number of trajectories to use to compute the expectation values
+    solver: MDP_solver
+        solver to use
     """
 
     def __init__(
@@ -32,17 +37,18 @@ class Demonstrator(Agent):
         demonstrator_name: str,
         T: int = 45,
         n_trajectories: int = None,
+        solver: MDP_solver = None
     ):  
         super().__init__(env, demonstrator_name)
         self.T = T
         self.V = None
         self.policy = None
-        self.trajectories = None
         self.n_trajectories = n_trajectories
-        self.reward = None
-        self.solver = MDPSolver.MDPSolverExpectation(T, compute_variance=True)
+        if solver is None:
+            self.solver = MDPSolverExactExpectation(T, compute_variance=True)
+        else:
+            self.solver = solver
         self.mu_demonstrator = None
-        self.reward = copy.deepcopy(self.env.reward)
 
     @abstractmethod
     def _define_policy(self):
@@ -56,16 +62,9 @@ class Demonstrator(Agent):
         -------
         feature expectation and variance arrays
         """
-        # TODO make MDP solver work with policies not the raw tables
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(
-            self.env, self.policy.pi, self.trajectories
+        return self.solver.compute_feature_SVF_bellmann_averaged(
+            self.env, self.policy, self.n_trajectories
         )
-
-        return (
-            mu,
-            nu,
-        )
-
     
 
 class SimpleDemonstrator(Demonstrator):
@@ -90,7 +89,7 @@ class SimpleDemonstrator(Demonstrator):
         env: SimpleEnvironment,
         demonstrator_name: str,
         T: int = 45,
-        n_trajectories: int = 1,
+        n_trajectories: int = None,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories)
 
@@ -157,9 +156,9 @@ class SimpleDemonstrator(Demonstrator):
         return pi_s
 
 
-class GymDemonstrator(Demonstrator):
+class CrossingMinigridDemonstrator(Demonstrator):
     """
-    Demonstrator in a given Gymnasium environment. Currently this demonstrator will be just trained using normal Q-learning.
+    Demonstrator in a given Crossing minigrid environment. Currently this demonstrator's policy will be hardcoded.
 
     Parameters
     ----------
@@ -180,14 +179,11 @@ class GymDemonstrator(Demonstrator):
         env: MinigridEnvironment,
         demonstrator_name: str,
         T: int = 45,
-        n_trajectories: int = 1,
+        n_trajectories: int = None,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories)
 
         self.policy = TabularPolicy(self._define_policy())
-        self.trajectories = [
-            self.solver.generate_episode(self.env, self.policy, self.T)[0]
-        ]
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def _define_policy(self):
@@ -282,3 +278,51 @@ class GymDemonstrator(Demonstrator):
             pi_s[t] = pi_s[0]
 
         return pi_s
+    
+
+class CarRacingDemonstrator(Demonstrator):
+    """
+    Demonstrator in a given Gymnasium environment. Currently this demonstrator will be just trained using stable baselines3 PPO <https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html>.
+
+    Parameters
+    ----------
+    env : environment.Environment
+        the environment representing the setting of the problem
+    demonstrator_name : str
+        name of the demonstrator
+    T : int
+        finite horizon value for the MDP solver
+    gamma : float
+        reward discount factor
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
+    time_steps : int
+        number of time steps to be used during training
+    """
+    def __init__(
+        self,
+        env: MinigridEnvironment,
+        demonstrator_name: str,
+        T: int = 45,
+        n_trajectories: int = 1,
+        time_steps: int = 1_000_000
+    ):
+        super().__init__(env, demonstrator_name, T, n_trajectories)
+
+        self.model_path = "./models/ppo_carracing.zip"
+
+        self.policy = self.__train_demonstrator(time_steps)
+
+        self.mu_demonstrator = self.get_mu_using_reward_features()
+
+    def __train_demonstrator(self, time_steps:int):
+        if os.path.exists(self.model_path):
+            print("Loading existing model")
+            model = PPO.load(self.model_path, env=self.env)
+
+        else:
+            model = PPO("CnnPolicy", self.env, verbose=1, tensorboard_log=self.env.log_dir)
+            model.learn(total_timesteps=time_steps)
+            model.save(self.model_path)
+
+        return ModelPolicy(model)
