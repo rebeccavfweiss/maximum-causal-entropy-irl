@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import numpy as np
+from stable_baselines3 import PPO
 
 class Policy(ABC):
     """
@@ -45,3 +46,34 @@ class TabularPolicy(Policy):
         action = int(np.random.choice(np.arange(len(probs)), p=probs))
 
         return action
+    
+class ModelPolicy(Policy):
+    """
+    Specific implementation of the Policy interface to use a model for the policy, e.g., Neural networks trained with PPO
+
+    Parameters
+    ----------
+    model : PPO
+        model to use for prediction
+    """
+    def __init__(self, model : PPO):
+        self.model = model
+
+    def predict(self, obs, t:int=None) -> int:
+        """
+        Predicts an action given an observation in the environment
+
+        Parameters
+        ----------
+        obs
+            observation from the environment
+        t : int
+            time step (only relevant if policy time dependent)
+
+        Returns
+        -------
+        action : int
+            action to take in the given state
+        """
+
+        return self.model.predict(obs, deterministic=True)[0]
