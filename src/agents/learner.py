@@ -1,4 +1,6 @@
-import MDPSolver
+import MDP_solver
+from MDP_solver_exact import MDPSolverExactVariance
+#from MDP_solver_approximation import MDPSolverApproximationVariance
 import numpy as np
 import copy
 from environments.environment import Environment
@@ -36,7 +38,7 @@ class Learner(Agent):
         mu_demonstrator: tuple[float, float],
         config_agent: dict[str:any],
         agent_name: str,
-        solver: MDPSolver.MDPSolver,
+        solver: MDP_solver.MDPSolver,
     ):
         self.env = env
         self.mu_demonstrator = mu_demonstrator
@@ -46,6 +48,7 @@ class Learner(Agent):
         self.tol = config_agent["tol"]
         self.maxiter = config_agent["maxiter"]
         self.miniter = config_agent["miniter"]
+        self.n_trajectories = config_agent.get("n_trajectories", None)
 
         self.theta_upperBound = _largenum
 
@@ -72,12 +75,11 @@ class Learner(Agent):
         fignum : int
             identifier number for figure
         """
-        pi_agent = self.compute_policy()
-        self.policy = TabularPolicy(pi_agent)
+        self.policy = self.compute_policy()
 
         self.V = self.solver.compute_value_function_bellmann_averaged(
             self.env,
-            self.policy.pi,
+            self.policy,
             dict(reward=self.env.reward),
         )  # compute the value function w.r.t to true reward parameters
 
@@ -98,7 +100,7 @@ class Learner(Agent):
             self.env, dict(reward=self.reward, variance=self.variance)
         )
         
-        return pi_agent
+        return TabularPolicy(pi_agent)
 
 
     def get_linear_reward(self) -> np.ndarray:
@@ -132,11 +134,7 @@ class Learner(Agent):
         feature expectation and variance, once restricted to the reward features, once the full arrays
         """
         pi_agent = self.compute_policy()
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_agent)
-        return (
-            mu,
-            nu,
-        )
+        return self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_agent, self.n_trajectories)
 
     def batch_MCE(self, verbose: bool = True) -> tuple[int, list[float]]:
         """
@@ -157,7 +155,8 @@ class Learner(Agent):
             time used per iteration
         """
 
-        calc_theta_v = isinstance(self.solver, MDPSolver.MDPSolverVariance)
+        calc_theta_v = (isinstance(self.solver, MDPSolverExactVariance) or False)
+         #               isinstance(self.solver, MDPSolverApproximationVariance))
 
         theta_e_pos = np.zeros(self.env.n_features)
         theta_e_neg = np.zeros(self.env.n_features)
