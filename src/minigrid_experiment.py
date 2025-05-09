@@ -1,7 +1,7 @@
 import agents.learner as learner
 import agents.demonstrator as demonstrator
 from environments.minigrid_environment import CrossingMiniGridEnvironment
-import MDPSolver
+import MDP_solver_exact as MDPSolver
 import numpy as np
 import pandas as pd
 from random import randint
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     grid_sizes = [5] #[2*i + 1 for i in range(4,6)]
     horizons = [11] #[2*s + 2 for s in grid_sizes]
     runs = 1
-    n_trajectories = 1
+    n_trajectories = None
 
     results = []
 
@@ -62,10 +62,11 @@ if __name__ == "__main__":
                 config_default_learner = create_config_learner()
 
                 # create demonstrator
-                demo = demonstrator.GymDemonstrator(
+                demo = demonstrator.CrossingMinigridDemonstrator(
                     env,
                     demonstrator_name="GymDemonstrator",
                     T=T,
+                    n_trajectories=n_trajectories
                 )
                 demo.draw(show, store, 0)
                 print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
@@ -76,21 +77,6 @@ if __name__ == "__main__":
 
                 reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)
 
-                # create agent that uses only expectation matching
-                agent_expectation = learner.Learner(
-                    env,
-                    demo.mu_demonstrator,
-                    config_default_learner,
-                    agent_name="Agent Expectation",
-                    solver=MDPSolver.MDPSolverExpectation(T),
-                )
-                iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
-                agent_expectation.compute_and_draw(show, store, 2)
-                reward_expectation = env.compute_true_reward_for_agent(agent_expectation, n_trajectories, T)
-
-                if verbose:
-                    print("First agent done")
-
                 print("-- Results --")
 
                 print("----- Demonstrator -----")
@@ -98,6 +84,21 @@ if __name__ == "__main__":
                 if verbose:
                     print("theta_*: ", env.theta_reward)
                     print("")
+
+                # create agent that uses only expectation matching
+                agent_expectation = learner.Learner(
+                    env,
+                    demo.mu_demonstrator,
+                    config_default_learner,
+                    agent_name="Agent Expectation",
+                    solver=MDPSolver.MDPSolverExactExpectation(T),
+                )
+                iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
+                agent_expectation.compute_and_draw(show, store, 2)
+                reward_expectation = env.compute_true_reward_for_agent(agent_expectation, n_trajectories, T)
+
+                if verbose:
+                    print("First agent done")
 
                 print("----- Expectation -----")
                 print(
@@ -125,7 +126,7 @@ if __name__ == "__main__":
                     demo.mu_demonstrator,
                     config_default_learner,
                     agent_name="Agent Variance",
-                    solver=MDPSolver.MDPSolverVariance(T),
+                    solver=MDPSolver.MDPSolverExactVariance(T),
                 )
                 iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
                 agent_variance.compute_and_draw(show, store, 4)

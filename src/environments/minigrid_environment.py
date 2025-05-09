@@ -4,10 +4,10 @@ import gymnasium as gym
 import minigrid
 from policy import Policy
 import imageio
-from environments.environment import Environment
+from environments.environment import GridEnvironment
 
 
-class MinigridEnvironment(Environment):
+class MinigridEnvironment(GridEnvironment):
     """
     Environment class exposing desired functionality from gymnasium.Environments and adding necessary information for training in these environments
 
@@ -47,7 +47,7 @@ class MinigridEnvironment(Environment):
         self.n_states = self.feature_matrix.shape[0]
         self.n_features = self.feature_matrix.shape[1]
 
-        self.reward = self._compute_true_reward()
+        self.reward = self._compute_state_reward()
 
     def reset(self) -> any:
         """
@@ -122,22 +122,11 @@ class MinigridEnvironment(Environment):
             t += 1
         if store:
             imageio.mimsave(
-                f"recordings\{strname}.mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
+                f"recordings\minigrid\{strname}.mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
             )
 
-    def action_sample(self) -> int:
-        """
-        Action space sample wrapper to generalize access over different environments
-
-        Returns
-        -------
-        action : int
-            random action to take
-        """
-        return self.env.action_space.sample()
-
     @abstractmethod
-    def _compute_true_reward(self):
+    def _compute_state_reward(self):
         pass
 
 
@@ -275,7 +264,7 @@ class CrossingMiniGridEnvironment(MinigridEnvironment):
 
         return initial_dist
 
-    def _compute_true_reward(self) -> np.ndarray:
+    def _compute_state_reward(self) -> np.ndarray:
         """
         Compute the true reward of the environment given the true reward parameters
 
