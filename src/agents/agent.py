@@ -1,6 +1,6 @@
 """ Unifying interface for both Demonstrator and Learner classes as they share some functionalities"""
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from environments.environment import Environment
 
 class Agent(ABC):
@@ -18,7 +18,6 @@ class Agent(ABC):
         self.env = env
         self.agent_name = agent_name
         self.policy = None
-        self.reward = None
         self.solver=None
         self.V = None
         self.T = None
@@ -42,7 +41,7 @@ class Agent(ABC):
         self.env.render(
             V=self.V,
             policy=self.policy,
-            reward=self.reward,
+            reward=self.env.reward,
             show=show,
             strname=self.agent_name,
             fignum=fignum,
