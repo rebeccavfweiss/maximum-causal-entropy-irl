@@ -1,7 +1,7 @@
 import agents.learner as learner
 import agents.demonstrator as demonstrator
 from environments.simple_environment import SimpleEnvironment
-import MDPSolver
+import MDP_solver_exact as MDPSolver
 import numpy as np
 
 
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     config_default_learner = create_config_learner()
 
     # create demonstrator
-    demo = demonstrator.SimpleDemonstrator(env, demonstrator_name="SimpleDemonstrator", T=T)
+    demo = demonstrator.SimpleDemonstrator(env, demonstrator_name="SimpleDemonstrator", T=T, n_trajectories=n_trajectories)
 
     demo.draw(show, store, 0)
     print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
@@ -48,13 +48,21 @@ if __name__ == "__main__":
 
     reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)
 
+    print("-- Results --")
+
+    print("----- Demonstrator -----")
+    print("reward: ", reward_demonstrator)
+    if verbose:
+        print("theta_*: ", env.theta_reward)
+        print("")
+
     # create agent that uses only expectation matching
     agent_expectation = learner.Learner(
         env,
         demo.mu_demonstrator,
         config_default_learner,
         agent_name="Agent Expectation",
-        solver=MDPSolver.MDPSolverExpectation(T),
+        solver=MDPSolver.MDPSolverExactExpectation(T),
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
     agent_expectation.compute_and_draw(show, store, 2)
@@ -63,13 +71,6 @@ if __name__ == "__main__":
     if verbose:
         print("First agent done")
 
-    print("-- Results --")
-
-    print("----- Demonstrator -----")
-    print("reward: ", reward_demonstrator)
-    if verbose:
-        print("theta_*: ", env.theta_reward)
-        print("")
 
     print("----- Expectation -----")
     print(
@@ -97,7 +98,7 @@ if __name__ == "__main__":
         demo.mu_demonstrator,
         config_default_learner,
         agent_name="Agent Variance",
-        solver=MDPSolver.MDPSolverVariance(T),
+        solver=MDPSolver.MDPSolverExactVariance(T),
     )
     iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
     agent_variance.compute_and_draw(show, store, 4)
