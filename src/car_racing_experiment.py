@@ -14,8 +14,8 @@ def create_carracing_env(lap_complete_percent:float=0.95):
         "gamma": 1.0,
         "lap_complete_percent": lap_complete_percent,
         "n_frames" : 4,
-        "width": 64,
-        "height": 64,
+        "width": 48,
+        "height": 48,
         "n_colors":6,
     }
 
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     verbose = False
 
     
-    n_trajectories = 100
+    n_trajectories = 30
     T = 1000
 
     # create the environment
