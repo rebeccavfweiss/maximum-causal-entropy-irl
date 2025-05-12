@@ -91,7 +91,6 @@ class MDPSolver(ABC):
 
         return episode, state_counts_gamma
 
-
     def get_T_pi(self, env: Environment, policy: np.ndarray) -> np.ndarray:
         """
         computes state transition probability based on a policy
@@ -117,8 +116,10 @@ class MDPSolver(ABC):
                     T_pi[t, :, n_s] += policy[t, :, a] * env.T_matrix[:, n_s, a]
 
         return T_pi
-    
-    def get_T_pi_from_trajectory(self, env: Environment, trajectory: list[tuple[int,int,int,float]]) -> np.ndarray:
+
+    def get_T_pi_from_trajectory(
+        self, env: Environment, trajectory: list[tuple[int, int, int, float]]
+    ) -> np.ndarray:
         """
         computes state transition probability based on a fixed trajectory (treated as deterministic policy)
 
@@ -139,12 +140,16 @@ class MDPSolver(ABC):
         length = min(len(trajectory), self.T)
 
         for i in range(length):
-            T_pi[i,trajectory[i][0], trajectory[i][2]] = 1.0
+            T_pi[i, trajectory[i][0], trajectory[i][2]] = 1.0
 
         return T_pi
 
     def compute_feature_SVF_bellmann_averaged(
-        self, env: Environment, policy: np.ndarray, trajectories:list[list[tuple[int,int,int,float]]] =None ,num_iter: int = None
+        self,
+        env: Environment,
+        policy: np.ndarray,
+        trajectories: list[list[tuple[int, int, int, float]]] = None,
+        num_iter: int = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         computes average feature SVF
@@ -166,7 +171,9 @@ class MDPSolver(ABC):
         mean feature expectation
         mean feature variance
         """
-        assert((policy is not None) or (trajectories is not None)), "At least policy or some trajectory must be given"
+        assert (policy is not None) or (
+            trajectories is not None
+        ), "At least policy or some trajectory must be given"
 
         # To ensure stochastic behaviour in the feature expectation and state-visitation frequencies (run num_iter times)
         if trajectories is not None:
@@ -181,7 +188,7 @@ class MDPSolver(ABC):
         for i in range(num_iter):
             if trajectories is None:
                 trajectory = None
-            else: 
+            else:
                 trajectory = trajectories[i]
             SV, feature_expectation, feature_variance = (
                 self.compute_feature_SVF_bellmann(env, policy, trajectory)
@@ -197,7 +204,10 @@ class MDPSolver(ABC):
         )
 
     def compute_feature_SVF_bellmann(
-        self, env: Environment, policy: np.ndarray, trajectory:list[tuple[int,int,int,float]]=None
+        self,
+        env: Environment,
+        policy: np.ndarray,
+        trajectory: list[tuple[int, int, int, float]] = None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         computes feature SVF
@@ -217,12 +227,14 @@ class MDPSolver(ABC):
         feature_expectation : ndarray
         feature_variance : ndarray
         """
-        assert((policy is not None) or (trajectory is not None)), "At least policy or some trajectory must be given"
+        assert (policy is not None) or (
+            trajectory is not None
+        ), "At least policy or some trajectory must be given"
 
         if trajectory is None:
             # Creating a T matrix for the policy
             T_pi = self.get_T_pi(env, policy)
-        else: 
+        else:
             T_pi = self.get_T_pi_from_trajectory(env, trajectory)
 
         for s in env.terminal_states:
@@ -247,7 +259,7 @@ class MDPSolver(ABC):
 
         if self.compute_variance:
 
-                # Compute feature_products using batch matrix multiplication
+            # Compute feature_products using batch matrix multiplication
             feature_products = np.einsum("ai,bj->abij", feature_matrix, feature_matrix)
 
             # Compute variance using vectorized operations
