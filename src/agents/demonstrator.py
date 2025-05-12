@@ -1,11 +1,9 @@
 import MDP_solver
 from MDP_solver_exact import MDPSolverExactExpectation
-from MDP_solver_approximation import MDPSolverApproximation
 from environments.environment import Environment
 from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
-from abc import abstractmethod
 from agents.agent import Agent
 from stable_baselines3 import PPO
 import os
@@ -37,8 +35,8 @@ class Demonstrator(Agent):
         demonstrator_name: str,
         T: int = 45,
         n_trajectories: int = None,
-        solver: MDP_solver = None
-    ):  
+        solver: MDP_solver = None,
+    ):
         super().__init__(env, demonstrator_name)
         self.T = T
         self.V = None
@@ -49,10 +47,6 @@ class Demonstrator(Agent):
         else:
             self.solver = solver
         self.mu_demonstrator = None
-
-    @abstractmethod
-    def _define_policy(self):
-        pass
 
     def get_mu_using_reward_features(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -65,7 +59,7 @@ class Demonstrator(Agent):
         return self.solver.compute_feature_SVF_bellmann_averaged(
             self.env, self.policy, self.n_trajectories
         )
-    
+
 
 class SimpleDemonstrator(Demonstrator):
     """
@@ -278,7 +272,7 @@ class CrossingMinigridDemonstrator(Demonstrator):
             pi_s[t] = pi_s[0]
 
         return pi_s
-    
+
 
 class CarRacingDemonstrator(Demonstrator):
     """
@@ -299,15 +293,17 @@ class CarRacingDemonstrator(Demonstrator):
     time_steps : int
         number of time steps to be used during training
     """
+
     def __init__(
         self,
         env: MinigridEnvironment,
         demonstrator_name: str,
         T: int = 45,
         n_trajectories: int = 1,
-        time_steps: int = 1_000_000
+        solver: MDP_solver = None,
+        time_steps: int = 500_000,
     ):
-        super().__init__(env, demonstrator_name, T, n_trajectories)
+        super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
         self.model_path = "./models/ppo_carracing.zip"
 
@@ -315,13 +311,13 @@ class CarRacingDemonstrator(Demonstrator):
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
-    def __train_demonstrator(self, time_steps:int):
+    def __train_demonstrator(self, time_steps: int):
         if os.path.exists(self.model_path):
             print("Loading existing model")
-            model = PPO.load(self.model_path, env=self.env)
+            model = PPO.load(self.model_path, env=self.env.env)
 
         else:
-            model = PPO("CnnPolicy", self.env, verbose=1, tensorboard_log=self.env.log_dir)
+            model = PPO("MlpPolicy", self.env.env, verbose=1)
             model.learn(total_timesteps=time_steps)
             model.save(self.model_path)
 
