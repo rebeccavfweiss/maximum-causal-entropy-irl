@@ -1,9 +1,8 @@
 import numpy as np
 import copy
-from scipy import sparse
 from MDP_solver import MDPSolver
 from environments.environment import Environment
-from policy import Policy, TabularPolicy
+from policy import Policy
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
@@ -47,10 +46,7 @@ class MDPSolverApproximation(MDPSolver):
         feature_variance : ndarray
         """
 
-        #TODO check if this is correct
-        feature_matrix = env.feature_matrix
-
-        feature_sum = feature_matrix[trajectory[0][0],:] + sum(env.gamma**(t+1)*feature_matrix[trajectory[t][2],:] for t in range(len(trajectory)))
+        feature_sum = trajectory[0][0] + sum(env.gamma**(t+1)*trajectory[t][2] for t in range(len(trajectory)))
 
 
         feature_sum_prod = np.outer(feature_sum, feature_sum)
