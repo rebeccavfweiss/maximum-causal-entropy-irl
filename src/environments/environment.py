@@ -21,6 +21,7 @@ class Environment(ABC):
 
         self.gamma = env_args["gamma"]
         self.terminal_states = None
+        self.reward = None
 
     @abstractmethod
     def reset(self):
