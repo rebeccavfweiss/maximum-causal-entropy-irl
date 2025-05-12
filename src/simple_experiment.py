@@ -17,7 +17,7 @@ def create_simple_env():
     return env
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 2000}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 3000, "learning_rate":0.1}
 
     return config_default_learner
 

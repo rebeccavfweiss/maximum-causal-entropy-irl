@@ -24,7 +24,7 @@ def create_minigrid_env(grid_size:int = 9):
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 400}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 400, "learning_rate":0.01}
 
     return config_default_learner
 
