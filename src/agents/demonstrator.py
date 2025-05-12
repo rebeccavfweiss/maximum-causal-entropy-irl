@@ -301,7 +301,7 @@ class CarRacingDemonstrator(Demonstrator):
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
-        time_steps: int = 500_000,
+        time_steps: int = 1_000_000,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
