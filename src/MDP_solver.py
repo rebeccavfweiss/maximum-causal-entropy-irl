@@ -58,7 +58,7 @@ class MDPSolver(ABC):
 
         episode = []
         for t in range(len_episode):
-            if (state in env.terminal_states) or (t == self.T):
+            if ((env.terminal_states is not None) and (state in env.terminal_states)) or (t == self.T):
                 break
             action = policy.predict(state, t)
             next_state, reward, _, _ = env.step(action)
