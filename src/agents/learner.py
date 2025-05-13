@@ -1,12 +1,10 @@
 import MDPSolver
 import numpy as np
-import copy
 from environments.environment import Environment
 from policy import TabularPolicy
 from agents.agent import Agent
 from time import time
 import torch
-import torch.optim as optim
 
 _largenum = 1000000
 
