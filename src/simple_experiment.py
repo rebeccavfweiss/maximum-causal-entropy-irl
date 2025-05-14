@@ -16,10 +16,12 @@ def create_simple_env():
 
     return env
 
+
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 2000}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 3000}
 
     return config_default_learner
+
 
 if __name__ == "__main__":
 
@@ -27,7 +29,7 @@ if __name__ == "__main__":
     store = False
     verbose = False
 
-    T= 20
+    T = 20
     n_trajectories = None
 
     # create the environment
@@ -37,7 +39,9 @@ if __name__ == "__main__":
     config_default_learner = create_config_learner()
 
     # create demonstrator
-    demo = demonstrator.SimpleDemonstrator(env, demonstrator_name="SimpleDemonstrator", T=T)
+    demo = demonstrator.SimpleDemonstrator(
+        env, demonstrator_name="SimpleDemonstrator", T=T
+    )
 
     demo.draw(show, store, 0)
     print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
@@ -58,7 +62,9 @@ if __name__ == "__main__":
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
     agent_expectation.compute_and_draw(show, store, 2)
-    reward_expectation = env.compute_true_reward_for_agent(agent_expectation, n_trajectories, T)
+    reward_expectation = env.compute_true_reward_for_agent(
+        agent_expectation, n_trajectories, T
+    )
 
     if verbose:
         print("First agent done")
@@ -79,7 +85,7 @@ if __name__ == "__main__":
         np.abs(reward_demonstrator - reward_expectation),
         ")",
     )
-    if verbose: 
+    if verbose:
         print("theta_e: ", agent_expectation.theta_e)
 
     print("iterations used: ", iter_expectation)
@@ -101,7 +107,9 @@ if __name__ == "__main__":
     )
     iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
     agent_variance.compute_and_draw(show, store, 4)
-    reward_variance = env.compute_true_reward_for_agent(agent_variance, n_trajectories, T)
+    reward_variance = env.compute_true_reward_for_agent(
+        agent_variance, n_trajectories, T
+    )
 
     if verbose:
         print("Second agent done")

@@ -1,10 +1,10 @@
 import MDPSolver
 import numpy as np
-import copy
 from environments.environment import Environment
 from policy import TabularPolicy
 from agents.agent import Agent
 from time import time
+import torch
 
 _largenum = 1000000
 
@@ -38,6 +38,7 @@ class Learner(Agent):
         agent_name: str,
         solver: MDPSolver.MDPSolver,
     ):
+
         self.env = env
         self.mu_demonstrator = mu_demonstrator
         self.theta_e = np.zeros(self.env.n_features)
@@ -97,9 +98,8 @@ class Learner(Agent):
         _, _, pi_agent = self.solver.soft_value_iteration(
             self.env, dict(reward=self.reward, variance=self.variance)
         )
-        
-        return pi_agent
 
+        return pi_agent
 
     def get_linear_reward(self) -> np.ndarray:
         """
@@ -132,7 +132,9 @@ class Learner(Agent):
         feature expectation and variance, once restricted to the reward features, once the full arrays
         """
         pi_agent = self.compute_policy()
-        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_agent)
+        _, mu, nu = self.solver.compute_feature_SVF_bellmann_averaged(
+            self.env, pi_agent
+        )
         return (
             mu,
             nu,
@@ -158,113 +160,91 @@ class Learner(Agent):
         """
 
         calc_theta_v = isinstance(self.solver, MDPSolver.MDPSolverVariance)
-
-        theta_e_pos = np.zeros(self.env.n_features)
-        theta_e_neg = np.zeros(self.env.n_features)
-        self.theta_e = np.zeros(self.env.n_features)
-
         runtime = []
 
+        initial_lr = 1.0
+        min_lr = 0.01
+        gamma = 0.99
+
+        # Initialize PyTorch tensors for thetas
+        theta_e = torch.zeros(self.env.n_features, requires_grad=True)
+        optimizer_e = torch.optim.Adam([theta_e], lr=initial_lr)
+        lr_lambda = lambda step: max(gamma ** np.log(step + 1), min_lr / initial_lr)
+        scheduler_e = torch.optim.lr_scheduler.LambdaLR(
+            optimizer_e, lr_lambda=lr_lambda
+        )
+
         if calc_theta_v:
-            theta_v_pos = np.zeros((self.env.n_features, self.env.n_features))
-            theta_v_neg = np.zeros((self.env.n_features, self.env.n_features))
-            self.theta_v = theta_v_pos - theta_v_neg
+            theta_v = torch.zeros(
+                (self.env.n_features, self.env.n_features), requires_grad=True
+            )
+            optimizer_v = torch.optim.Adam([theta_v], lr=initial_lr)
+            lr_lambda = lambda step: max(gamma ** np.log(step + 1), min_lr / initial_lr)
+            scheduler_v = torch.optim.lr_scheduler.LambdaLR(
+                optimizer_v, lr_lambda=lr_lambda
+            )
 
         mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
         if verbose:
             print("\n========== batch_MCE for " + self.agent_name + " =======")
 
-        gradientconstant = 1
         t = 1
         while True:
-            # set learning rate
-
             start = time()
 
-            eta = gradientconstant / np.sqrt(t)
-
-            if verbose:
-                print("t=", t)
-                print("...eta_e=", eta)
-                print(
-                    "...mu_reward_agent=",
-                    mu_reward_agent,
-                    " mu_variance_agent=",
-                    mu_variance_agent,
-                    " mu_demonstrator=",
-                    self.mu_demonstrator[0],
-                    " nu_demonstrator=",
-                    self.mu_demonstrator[1],
-                )
-                print("...theta_e=", self.theta_e)
-                print("...theta_v=", self.theta_v)
-
-            theta_e_pos_old = copy.deepcopy(theta_e_pos)
-            theta_e_neg_old = copy.deepcopy(theta_e_neg)
-            theta_e_old = copy.deepcopy(self.theta_e)
-            # update lambda
-
-            theta_e_pos_old = copy.deepcopy(theta_e_pos)
-            theta_e_neg_old = copy.deepcopy(theta_e_neg)
-            theta_e_old = copy.deepcopy(self.theta_e)
-
-            theta_e_pos = theta_e_pos_old - eta * (
-                mu_reward_agent - self.mu_demonstrator[0]
-            )
-            theta_e_neg = theta_e_neg_old - eta * (
-                self.mu_demonstrator[0] - mu_reward_agent
-            )
-
-            theta_e_pos = np.maximum(theta_e_pos, 0)
-            theta_e_neg = np.maximum(theta_e_neg, 0)
-            theta_e_pos = np.minimum(theta_e_pos, self.theta_upperBound)
-            theta_e_neg = np.minimum(theta_e_neg, self.theta_upperBound)
-            self.theta_e = theta_e_pos - theta_e_neg
-
+            # Get current theta values into the object (for get_mu_soft to use them)
+            self.theta_e = theta_e.detach().numpy()
             if calc_theta_v:
-                theta_v_pos_old = copy.deepcopy(theta_v_pos)
-                theta_v_neg_old = copy.deepcopy(theta_v_neg)
-                theta_v_old = copy.deepcopy(self.theta_v)
+                self.theta_v = theta_v.detach().numpy()
 
-                theta_v_pos = theta_v_pos_old - eta * (
-                    mu_variance_agent - self.mu_demonstrator[1]
-                )
-                theta_v_neg = theta_v_neg_old - eta * (
-                    self.mu_demonstrator[1] - mu_variance_agent
-                )
-
-                theta_v_pos = np.maximum(theta_v_pos, 0)
-                theta_v_neg = np.maximum(theta_v_neg, 0)
-                theta_v_pos = np.minimum(theta_v_pos, self.theta_upperBound)
-                theta_v_neg = np.minimum(theta_v_neg, self.theta_upperBound)
-                self.theta_v = theta_v_pos - theta_v_neg
-
-            # update state
+            # Recompute agent feature expectations
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
-            diff_L2_norm_theta_e = np.linalg.norm(theta_e_old - self.theta_e)
+            # Compute gradient for reward part
+            grad_e = torch.tensor(
+                mu_reward_agent - self.mu_demonstrator[0], dtype=torch.float32
+            )
+
+            optimizer_e.zero_grad()
+            theta_e.grad = grad_e
+            optimizer_e.step()
+            scheduler_e.step()
+
+            # Clamp values (optional, depending on your upper bounds)
+            with torch.no_grad():
+                theta_e.clamp_(-self.theta_upperBound, self.theta_upperBound)
 
             if calc_theta_v:
-                diff_L2_norm_theta_v = np.linalg.norm(theta_v_old - self.theta_v)
+                grad_v = torch.tensor(
+                    mu_variance_agent - self.mu_demonstrator[1], dtype=torch.float32
+                )
+                optimizer_v.zero_grad()
+                theta_v.grad = grad_v
+                optimizer_v.step()
+                scheduler_v.step()
+
+                with torch.no_grad():
+                    theta_v.clamp_(-self.theta_upperBound, self.theta_upperBound)
 
             end = time()
-
             runtime.append(end - start)
 
-            if verbose:
-                print("...diff_L2_norm_theta_e=", diff_L2_norm_theta_e)
-                if calc_theta_v:
-                    print("...diff_L2_norm_theta_v=", diff_L2_norm_theta_v)
-
-            # decide whether to continue
+            # Convergence check
+            theta_e_diff = torch.norm(theta_e.grad).item()
             if calc_theta_v:
-                if (diff_L2_norm_theta_e < self.tol) and (
-                    diff_L2_norm_theta_v < 5 * self.tol
-                ):
-                    if t >= self.miniter:
-                        break
-            elif diff_L2_norm_theta_e < self.tol:
+                theta_v_diff = torch.norm(theta_v.grad).item()
+
+            if verbose:
+                print(
+                    f"t={t}, lr={scheduler_e.get_last_lr()}, theta_e_diff={theta_e_diff}"
+                )
+                if calc_theta_v:
+                    print(f"theta_v_diff={theta_v_diff}")
+
+            if theta_e_diff < self.tol and (
+                not calc_theta_v or theta_v_diff < 5 * self.tol
+            ):
                 if t >= self.miniter:
                     break
 
@@ -272,6 +252,11 @@ class Learner(Agent):
                 break
 
             t += 1
+
+        # Final assignment back to numpy
+        self.theta_e = theta_e.detach().numpy()
+        if calc_theta_v:
+            self.theta_v = theta_v.detach().numpy()
 
         if verbose:
             print(f"Terminated in {t} iterations")

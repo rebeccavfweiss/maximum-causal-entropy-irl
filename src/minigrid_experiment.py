@@ -7,8 +7,7 @@ import pandas as pd
 from random import randint
 
 
-
-def create_minigrid_env(grid_size:int = 9):
+def create_minigrid_env(grid_size: int = 9):
 
     config_env = {
         "theta": np.diag([-1.0, -1.0, 0.5, 0.5, 10.0, -10.0]),
@@ -24,7 +23,7 @@ def create_minigrid_env(grid_size:int = 9):
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 400}
+    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": 3000}
 
     return config_default_learner
 
@@ -35,17 +34,16 @@ if __name__ == "__main__":
     store = False
     verbose = False
 
-    
-    grid_sizes = [5] #[2*i + 1 for i in range(4,6)]
-    horizons = [11] #[2*s + 2 for s in grid_sizes]
-    runs = 1
-    n_trajectories = 1
+    grid_sizes = [2 * i + 1 for i in range(2, 11, 2)]
+    horizons = [2 * s + 2 for s in grid_sizes]
+    runs = 3
+    n_trajectories = None
 
     results = []
 
     for grid_size in grid_sizes:
         for T in horizons:
-            if (T < 2*grid_size+1):
+            if T < 2 * grid_size + 1:
                 # agent has no chance to complete goal in the given horizon
                 continue
             for i in range(runs):
@@ -56,7 +54,6 @@ if __name__ == "__main__":
                 print("T = ", T)
                 print("grid_size = ", grid_size)
                 print("run = ", i)
-
 
                 # Learner config
                 config_default_learner = create_config_learner()
@@ -74,7 +71,9 @@ if __name__ == "__main__":
                 if verbose:
                     print("Demonstrator done")
 
-                reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)
+                reward_demonstrator = env.compute_true_reward_for_agent(
+                    demo, n_trajectories, T
+                )
 
                 # create agent that uses only expectation matching
                 agent_expectation = learner.Learner(
@@ -84,9 +83,13 @@ if __name__ == "__main__":
                     agent_name="Agent Expectation",
                     solver=MDPSolver.MDPSolverExpectation(T),
                 )
-                iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
+                iter_expectation, time_expectation = agent_expectation.batch_MCE(
+                    verbose=verbose
+                )
                 agent_expectation.compute_and_draw(show, store, 2)
-                reward_expectation = env.compute_true_reward_for_agent(agent_expectation, n_trajectories, T)
+                reward_expectation = env.compute_true_reward_for_agent(
+                    agent_expectation, n_trajectories, T
+                )
 
                 if verbose:
                     print("First agent done")
@@ -107,7 +110,7 @@ if __name__ == "__main__":
                     np.abs(reward_demonstrator - reward_expectation),
                     ")",
                 )
-                if verbose: 
+                if verbose:
                     print("theta_e: ", agent_expectation.theta_e)
 
                 print("iterations used: ", iter_expectation)
@@ -129,7 +132,9 @@ if __name__ == "__main__":
                 )
                 iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
                 agent_variance.compute_and_draw(show, store, 4)
-                reward_variance = env.compute_true_reward_for_agent(agent_variance, n_trajectories, T)
+                reward_variance = env.compute_true_reward_for_agent(
+                    agent_variance, n_trajectories, T
+                )
 
                 if verbose:
                     print("Second agent done")
@@ -154,10 +159,43 @@ if __name__ == "__main__":
                     np.mean(time_variance),
                 )
 
-                results.append([T, grid_size, i, reward_demonstrator, reward_expectation, iter_expectation, sum(time_expectation), np.mean(time_expectation),np.std(time_expectation),
-                                reward_variance, iter_variance, sum(time_variance), np.mean(time_variance), np.std(time_variance)])
+                results.append(
+                    [
+                        T,
+                        grid_size,
+                        i,
+                        reward_demonstrator,
+                        reward_expectation,
+                        iter_expectation,
+                        sum(time_expectation),
+                        np.mean(time_expectation),
+                        np.std(time_expectation),
+                        reward_variance,
+                        iter_variance,
+                        sum(time_variance),
+                        np.mean(time_variance),
+                        np.std(time_variance),
+                    ]
+                )
 
-            results_df = pd.DataFrame(results, columns=["T", "grid", "run","reward_demo", "reward_exp", "iter_exp", "time_exp", "mean_time_exp", "std_time_exp",
-                                                        "reward_var", "iter_var", "time_var", "mean_time_var", "std_time_var"])
-            
+            results_df = pd.DataFrame(
+                results,
+                columns=[
+                    "T",
+                    "grid",
+                    "run",
+                    "reward_demo",
+                    "reward_exp",
+                    "iter_exp",
+                    "time_exp",
+                    "mean_time_exp",
+                    "std_time_exp",
+                    "reward_var",
+                    "iter_var",
+                    "time_var",
+                    "mean_time_var",
+                    "std_time_var",
+                ],
+            )
+
             results_df.to_csv("experiments\\results_new.csv")
