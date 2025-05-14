@@ -39,7 +39,6 @@ class Learner(Agent):
         solver: MDPSolver.MDPSolver,
     ):
 
-        # TODO check which variables not used
         self.env = env
         self.mu_demonstrator = mu_demonstrator
         self.theta_e = np.zeros(self.env.n_features)
