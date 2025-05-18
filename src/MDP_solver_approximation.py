@@ -48,8 +48,9 @@ class MDPSolverApproximation(MDPSolver):
 
         feature_sum = trajectory[0][0] + sum(env.gamma**(t+1)*trajectory[t][2] for t in range(len(trajectory)))
 
-
+        feature_sum = feature_sum.astype(np.float32)
         feature_sum_prod = np.outer(feature_sum, feature_sum)
+
 
         return feature_sum, feature_sum_prod
     
