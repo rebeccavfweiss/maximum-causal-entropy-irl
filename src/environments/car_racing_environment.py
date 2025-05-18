@@ -2,11 +2,14 @@ from environments.environment import Environment
 from policy import Policy
 import gymnasium as gym
 from stable_baselines3.common.vec_env import (
-    DummyVecEnv,
     VecFrameStack,
     VecVideoRecorder,
 )
+from stable_baselines3.common.atari_wrappers import WarpFrame
+from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.evaluation import evaluate_policy
 import os
 import numpy as np
 import cv2
@@ -36,29 +39,36 @@ class CarRacingEnvironment(Environment):
         self.n_frames = env_args["n_frames"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
 
-        env = DummyVecEnv([self.make_env])
-        self.env = VecFrameStack(env, n_stack=env_args["n_frames"])
-        self.n_actions = self.env.action_space.n
+        self.log_dir = "./experiments"
 
-        self.n_states = (
-            self.frame_height * self.frame_width * self.n_colors * self.n_colors + 1
-        )
+        env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
+        self.env = VecTransposeImage(env)
+
+        env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
+        self.env_val = VecTransposeImage(env)
+
+        self.eval_callback = EvalCallback(self.env_val,
+                             best_model_save_path=self.log_dir,
+                             log_path=self.log_dir,
+                             eval_freq=25_000,
+                             render=False,
+                             n_eval_episodes=5)
 
     def make_env(self):
-        env = gym.make(
+        env_kwargs = {
+            "render_mode": "rgb_array",
+            "continuous": False,
+            "lap_complete_percent": self.lap_complete_percent,
+            "domain_randomize": False
+        }
+
+        env = make_vec_env(
             "CarRacing-v3",
-            render_mode="rgb_array",
-            continuous=False,
-            lap_complete_percent=self.lap_complete_percent,
-            domain_randomize=False,
+            n_envs=1,
+            wrapper_class=WarpFrame,
+            env_kwargs=env_kwargs
         )
-        # reduce size of the observations
-        env = KMeansResizeWrapper(
-            env,
-            width=self.frame_width,
-            height=self.frame_height,
-            n_clusters=self.n_colors,
-        )
+
         return env
 
     def reset(self) -> any:
@@ -147,68 +157,26 @@ class CarRacingEnvironment(Environment):
 
         env.close()
 
+    def compute_true_reward_for_agent(
+        self, agent, n_trajectories: int = None, T: int = None
+    ) -> float:
+        """
+        Compute the true reward in the environment either with the given policy or with trajectories
 
-class KMeansResizeWrapper(gym.ObservationWrapper):
-    """
-    Environment wrapper in order to reduce the size of the observation space
+        Parameters
+        ----------
+        agent
+            agent/demonstrator that should be evaluated in the environment
+        n_trajectories : int
+            number of trajectories to use, if None then we use the reward vector
 
-    Parameters
-    ----------
-    env : gym.Env
-        environment on which the wrapper should be applied
-    width : int
-        new width of the frame
-    height : int
-        new height of the frame
-    n_clusters : int
-        number of color labels to use
-    """
+        Returns
+        -------
+        reward : float
+            true reward for the given policy
+        """
 
-    def __init__(
-        self, env: gym.Env, width: int = 84, height: int = 84, n_clusters: int = 6
-    ):
-        super().__init__(env)
-        self.width = width
-        self.height = height
-        self.n_clusters = n_clusters
+        mean_reward, std_reward = evaluate_policy(agent.pi.model, self.env, n_eval_episodes=n_trajectories)
+        print(f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
 
-        # Updated observation space: single channel (cluster index per pixel)
-        self.observation_space = Box(
-            low=0,
-            high=n_clusters - 1,
-            shape=(self.height, self.width, 1),
-            dtype=np.uint8,
-        )
-
-        # Pre-train KMeans centroids on a few random frames
-        self.kmeans = self._init_kmeans()
-
-    def _init_kmeans(self):
-        print("Initializing KMeans clusters on sample frames")
-        samples = []
-
-        for _ in range(10):
-            obs, _ = self.env.reset()
-            img = cv2.resize(
-                obs, (self.width, self.height), interpolation=cv2.INTER_AREA
-            )
-            flat_pixels = img.reshape(-1, 3)
-            idx = np.random.choice(flat_pixels.shape[0], 1000, replace=False)
-            samples.append(flat_pixels[idx])
-
-        all_samples = np.concatenate(samples, axis=0)
-        kmeans = KMeans(n_clusters=self.n_clusters, random_state=0, n_init="auto").fit(
-            all_samples
-        )
-        return kmeans
-
-    def observation(self, obs):
-        # Resize
-        resized = cv2.resize(
-            obs, (self.width, self.height), interpolation=cv2.INTER_AREA
-        )
-        # Flatten and apply KMeans
-        flat = resized.reshape(-1, 3)
-        labels = self.kmeans.predict(flat)
-        clustered = labels.reshape(self.height, self.width, 1).astype(np.uint8)
-        return clustered
+        return mean_reward
