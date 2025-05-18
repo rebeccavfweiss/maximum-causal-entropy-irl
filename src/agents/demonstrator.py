@@ -5,7 +5,8 @@ from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, SAC
+from stable_baselines3.common.evaluation import evaluate_policy
 import os
 import numpy as np
 from operator import itemgetter
@@ -317,8 +318,8 @@ class CarRacingDemonstrator(Demonstrator):
             model = PPO.load(self.model_path, env=self.env.env)
 
         else:
-            model = PPO("MlpPolicy", self.env.env, verbose=1)
-            model.learn(total_timesteps=time_steps)
+            model = PPO("CnnPolicy", self.env.env, verbose=0)
+            model.learn(total_timesteps=time_steps, progress_bar=True, callback=self.env.eval_callback)
             model.save(self.model_path)
 
         return ModelPolicy(model)
