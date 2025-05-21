@@ -98,24 +98,27 @@ class MDPSolver(ABC):
             #use policy directly
             num_iter = 1
 
-        mu_list = []
-        nu_list = []
+        mu_avg = None
+        nu_avg = None
 
         for i in range(num_iter):
             if n_trajectories is None or n_trajectories == 0:
                 trajectory = None
             else:
                 trajectory = self.generate_episode(env, policy, self.T)
+
             feature_expectation, feature_variance = (
                 self.compute_feature_SVF_bellmann(env, policy, trajectory)
             )
-            mu_list.append(feature_expectation)
-            nu_list.append(feature_variance)
 
-        return (
-            np.mean(mu_list, axis=0),
-            np.mean(nu_list, axis=0),
-        )
+            if mu_avg is None:
+                mu_avg = np.array(feature_expectation, dtype=np.float64)
+                nu_avg = np.array(feature_variance, dtype=np.float64)
+            else:
+                mu_avg += (np.array(feature_expectation) - mu_avg) / (i + 1)
+                nu_avg += (np.array(feature_variance) - nu_avg) / (i + 1)
+
+        return mu_avg, nu_avg
 
     @abstractmethod
     def compute_feature_SVF_bellmann(
