@@ -1,9 +1,10 @@
 from environments.environment import Environment
 from policy import Policy
-import gymnasium as gym
 from stable_baselines3.common.vec_env import (
     VecFrameStack,
     VecVideoRecorder,
+    VecEnvWrapper,
+    VecEnv
 )
 from stable_baselines3.common.atari_wrappers import WarpFrame
 from stable_baselines3.common.callbacks import EvalCallback
@@ -12,9 +13,6 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 import os
 import numpy as np
-import cv2
-from sklearn.cluster import KMeans
-from gymnasium.spaces import Box
 
 
 class CarRacingEnvironment(Environment):
@@ -53,6 +51,8 @@ class CarRacingEnvironment(Environment):
                              eval_freq=25_000,
                              render=False,
                              n_eval_episodes=5)
+        
+        self._base_env = self.env
 
     def make_env(self):
         env_kwargs = {
@@ -61,7 +61,6 @@ class CarRacingEnvironment(Environment):
             "lap_complete_percent": self.lap_complete_percent,
             "domain_randomize": False
         }
-
         env = make_vec_env(
             "CarRacing-v3",
             n_envs=1,
@@ -173,10 +172,83 @@ class CarRacingEnvironment(Environment):
         Returns
         -------
         reward : float
-            true reward for the given policy
+            true reward for the given policy (approximated based on trajectories)
         """
-
-        mean_reward, std_reward = evaluate_policy(agent.pi.model, self.env, n_eval_episodes=n_trajectories)
+        mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories, return_episode_rewards=True)
+        
+        # TODO remove this once everything works as expected this was only in order to test whether or not overwriting the reward function works
+        #mean_reward, std_reward = self.evaluate_policy_custom(agent.policy.model, self.env, n_trajectories)
         print(f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
 
         return mean_reward
+    
+    def set_custom_reward_function(self, custom_reward_fn):
+        """Wrap the original vec_env with a custom reward function."""
+        self.env = VecCustomRewardWrapper(self._base_env, custom_reward_fn)
+
+    def reset_reward_function(self):
+        """Reset to the original vec_env with default rewards."""
+        self.env = self._base_env
+
+    def evaluate_policy_custom(
+        self,
+        model,
+        vec_env: VecEnv,
+        n_eval_episodes: int = 5,
+        deterministic: bool = True,
+        render: bool = False,
+    ) -> tuple[float, float]:
+        """
+        Custom evaluation function that uses actual env.step() rewards
+        instead of relying on info["episode"]["r"].
+
+        Assumes n_envs = 1 (can be extended).
+        """
+        episode_rewards = []
+        n_envs = vec_env.num_envs
+        assert n_envs == 1, "This custom evaluator only supports n_envs=1 for now."
+
+        for _ in range(n_eval_episodes):
+            obs = vec_env.reset()
+            done = False
+            total_reward = 0.0
+
+            while not done:
+                action, _ = model.predict(obs, deterministic=deterministic)
+                obs, reward, done, info = vec_env.step(action)
+
+                total_reward += reward[0]  # reward is vectorized: shape (n_envs,)
+
+                if render:
+                    vec_env.render()
+
+            episode_rewards.append(total_reward)
+
+        mean_reward = np.mean(episode_rewards)
+        std_reward = np.std(episode_rewards)
+        return mean_reward, std_reward
+
+
+class VecCustomRewardWrapper(VecEnvWrapper):
+    def __init__(self, venv, custom_reward_fn):
+        """
+        :param venv: Vectorized environment
+        :param custom_reward_fn: function(next_obs, original_reward, info) -> custom_reward
+        """
+        super().__init__(venv)
+        self.custom_reward_fn = custom_reward_fn
+
+    def reset(self):
+        return self.venv.reset()
+
+    def step_async(self, actions):
+        self.venv.step_async(actions)
+
+    def step_wait(self):
+        next_obs, rewards, dones, info = self.venv.step_wait()
+        # Apply custom reward function vector-wise
+        custom_rewards = np.array([
+            self.custom_reward_fn(next_obs[i])
+            for i in range(len(rewards))
+        ])
+        return next_obs, custom_rewards, dones, info
