@@ -2,7 +2,8 @@ import numpy as np
 import copy
 from MDP_solver import MDPSolver
 from environments.environment import Environment
-from policy import Policy
+from policy import Policy, ModelPolicy
+from stable_baselines3 import SAC
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
@@ -20,10 +21,18 @@ class MDPSolverApproximation(MDPSolver):
         finite horizon value
     compute_variance : bool
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    sac_timesteps : int
+        timesteps for embedded SAC training in the approximated SVI
+    sac_buffer_size : int
+        buffer size for embedded SAC training in the approximated SVI
     """
 
-    def __init__(self, T: int, compute_variance: bool):
+    def __init__(self, T: int, compute_variance: bool, sac_timesteps:int = 10000, sac_buffer_size:int=100000):
+        #TODO add parameters for SAC learning
         super().__init__(T, compute_variance)
+
+        self.sac_timesteps = sac_timesteps
+        self.sac_buffer_size = sac_buffer_size
 
     def compute_feature_SVF_bellmann(
         self, env: Environment, policy: Policy, trajectory:list[tuple[int,int,int,float]]=None
@@ -45,18 +54,90 @@ class MDPSolverApproximation(MDPSolver):
         feature_expectation : ndarray
         feature_variance : ndarray
         """
-
-        feature_sum = trajectory[0][0] + sum(env.gamma**(t+1)*trajectory[t][2] for t in range(len(trajectory)))
+        feature_sum = trajectory[0][0].flatten() + sum(env.gamma**(t+1)*trajectory[t][2].flatten() for t in range(len(trajectory)))
 
         feature_sum = feature_sum.astype(np.float32)
-        feature_sum_prod = np.outer(feature_sum, feature_sum)
+
+        if self.compute_variance:
+            feature_sum_prod = np.outer(feature_sum, feature_sum)
+        else:
+            feature_sum_prod = np.zeros((feature_sum.shape[0], feature_sum.shape[0]), dtype=np.float32)
 
 
         return feature_sum, feature_sum_prod
     
+
+class MDPSolverApproximationExpectation(MDPSolverApproximation):
+    """
+    MDP solver that uses feature expectation matching using an approximation for Soft Value Iteration by using a Soft Critic Actor algorithm
+
+    Parameters
+    ----------
+    T : int
+        finite horizon value
+    compute_variance : bool
+            whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    sac_timesteps : int
+        timesteps for embedded SAC training in the approximated SVI
+    sac_buffer_size : int
+        buffer size for embedded SAC training in the approximated SVI
+    """
+
+    def __init__(self, T: int = 45, compute_variance: bool = False, sac_timesteps:int=10000, sac_buffer_size:int=100000):
+        super().__init__(T, compute_variance, sac_timesteps, sac_buffer_size)
+    
     def soft_value_iteration(
         self, env: Environment, values: dict[str:any]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Policy:
+        """
+        computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
+
+        Parameters
+        ----------
+        env : environment.Environment
+            the environment representing the setting of the problem
+        values : dict[str:any]
+            dictionary with the feature expecation and variance functions
+
+        Returns
+        -------
+        pi_s : Policy
+            policy based on the learned model
+        """
+
+        env.set_custom_reward_function(lambda s: values["reward"](s.flatten()))
+
+        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size)
+
+        model.learn(total_timesteps=self.sac_timesteps)
+
+        model.save("models/agent_expectation")
+
+        env.reset_reward_function()
+
+        return ModelPolicy(model)
+class MDPSolverApproximationVariance(MDPSolverApproximation):
+    """
+    MDP solver that uses feature expectation and variance matching using an approximation for Soft Value Iteration by using a Soft Critic Actor algorithm
+
+    Parameters
+    ----------
+    T : int
+        finite horizon value
+    compute_variance : bool
+            whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    sac_timesteps : int
+        timesteps for embedded SAC training in the approximated SVI
+    sac_buffer_size : int
+        buffer size for embedded SAC training in the approximated SVI
+    """
+
+    def __init__(self, T: int = 45, compute_variance: bool = True, sac_timesteps:int =10000, sac_buffer_size:int=100000):
+        super().__init__(T, compute_variance, sac_timesteps, sac_buffer_size)
+    
+    def soft_value_iteration(
+        self, env: Environment, values: dict[str:any]
+    ) -> Policy:
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -69,47 +150,19 @@ class MDPSolverApproximation(MDPSolver):
 
         Returns
         -------
-        Q : ndarray
-            state-action value function
-        V : ndarray
-            state value function
-        pi_s : ndarray
-            stochastic policy
+        pi_s : Policy
+            learned policy
         """
 
-        V = np.zeros((self.T, env.n_states))
-        Q = np.zeros((self.T, env.n_states, env.n_actions))
+        # Assumption: gamma = 1 in order to simplify reward term
+        env.set_custom_reward_function(lambda s: values["reward"](s.flatten())+ values["variance"](s.flatten()))
 
-        for a in range(env.n_actions):
-            Q[self.T - 1, :, a] = values["reward"]
+        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size)
 
-        V[self.T - 1, :] = self.softmax_list(Q[self.T - 1, :, :], env.n_states)
+        model.learn(total_timesteps=self.sac_timesteps)
 
-        for t in range(self.T - 2, -1, -1):
-            for a in range(env.n_actions):
-                Q[t, :, a] = values["reward"] + env.gamma * env.T_sparse_list[a].dot(
-                    V[t + 1]
-                )
+        model.save("models/agent_variance")
 
-            V[t, :] = self.softmax_list(Q[t, :, :], env.n_states)
+        env.reset_reward_function()
 
-        temp = copy.deepcopy(Q)
-        for t in range(self.T):
-            for s in range(env.n_states):
-                temp[t, s, :] -= V[t, s]
-
-        pi_s = np.zeros((self.T, env.n_states, env.n_actions))
-
-        for t in range(self.T):
-            # Softmax by row to interpret these values as probabilities.
-            temp[t, :, :] -= (
-                temp[t, :, :].max(axis=1).reshape((env.n_states, 1))
-            )  # For numerical stability.
-            pi_s[t, :, :] = np.exp(temp[t, :, :]) / np.exp(temp[t, :, :]).sum(
-                axis=1
-            ).reshape((env.n_states, 1))
-
-        for s in env.terminal_states:
-            pi_s[:, s, :] = 0.0
-
-        return Q, V, pi_s
+        return ModelPolicy(model)
