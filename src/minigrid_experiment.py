@@ -86,7 +86,7 @@ if __name__ == "__main__":
                     print("")
 
                 # create agent that uses only expectation matching
-                agent_expectation = learner.Learner(
+                agent_expectation = learner.TabularLearner(
                     env,
                     demo.mu_demonstrator,
                     config_default_learner,
@@ -121,7 +121,7 @@ if __name__ == "__main__":
                 print("")
 
                 # create agent that also matches variances
-                agent_variance = learner.Learner(
+                agent_variance = learner.TabularLearner(
                     env,
                     demo.mu_demonstrator,
                     config_default_learner,
