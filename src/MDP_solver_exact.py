@@ -264,7 +264,7 @@ class MDPSolverExactExpectation(MDPSolverExact):
     T : int
         finite horizon value
     compute_variance : bool
-            whether or not variance term should be computed (for efficiency reasons will only be computed if necessary) (default = False)
+            whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
     """
 
     def __init__(self, T: int = 45, compute_variance: bool = False):
@@ -272,7 +272,7 @@ class MDPSolverExactExpectation(MDPSolverExact):
 
     def soft_value_iteration(
         self, env: Environment, values: dict[str:any]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Policy:
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -285,12 +285,8 @@ class MDPSolverExactExpectation(MDPSolverExact):
 
         Returns
         -------
-        Q : ndarray
-            state-action value function
-        V : ndarray
-            state value function
-        pi_s : ndarray
-            stochastic policy
+        pi_s : Policy
+            learned policy
         """
 
         V = np.zeros((self.T, env.n_states))
@@ -328,7 +324,7 @@ class MDPSolverExactExpectation(MDPSolverExact):
         for s in env.terminal_states:
             pi_s[:, s, :] = 0.0
 
-        return Q, V, pi_s
+        return TabularPolicy(pi_s)
 
 
 class MDPSolverExactVariance(MDPSolverExact):
@@ -340,7 +336,7 @@ class MDPSolverExactVariance(MDPSolverExact):
     T : int
         finite horizon value
     compute_variance : bool
-            whether or not variance term should be computed (for efficiency reasons will only be computed if necessary) (default = True)
+            whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
     """
 
     def __init__(self, T: int = 45, compute_variance: bool = True):
@@ -348,7 +344,7 @@ class MDPSolverExactVariance(MDPSolverExact):
 
     def soft_value_iteration(
         self, env: Environment, values: dict[str:any]
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> Policy:
         """
         computes soft value iteration using feature expectation and variance matching
 
@@ -361,12 +357,8 @@ class MDPSolverExactVariance(MDPSolverExact):
 
         Returns
         -------
-        Q : ndarray
-            state-action value function
-        V : ndarray
-            state value function
-        pi_s : ndarray
-            stochastic policy
+        pi_s : Policy
+            learned policy
         """
 
         V = np.zeros((self.T, env.n_states))
@@ -408,4 +400,4 @@ class MDPSolverExactVariance(MDPSolverExact):
         for s in env.terminal_states:
             pi_s[:, s, :] = 0.0
 
-        return Q, V, pi_s
+        return TabularPolicy(pi_s)
