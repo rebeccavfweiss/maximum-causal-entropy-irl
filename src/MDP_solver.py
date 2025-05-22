@@ -112,8 +112,8 @@ class MDPSolver(ABC):
             )
 
             if mu_avg is None:
-                mu_avg = np.array(feature_expectation, dtype=np.float64)
-                nu_avg = np.array(feature_variance, dtype=np.float64)
+                mu_avg = np.array(feature_expectation, dtype=np.float32)
+                nu_avg = np.array(feature_variance, dtype=np.float32)
             else:
                 mu_avg += (np.array(feature_expectation) - mu_avg) / (i + 1)
                 nu_avg += (np.array(feature_variance) - nu_avg) / (i + 1)
