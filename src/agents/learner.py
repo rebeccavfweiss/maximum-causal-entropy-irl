@@ -1,13 +1,13 @@
 import MDP_solver
-from MDP_solver_exact import MDPSolverExactVariance
-#from MDP_solver_approximation import MDPSolverApproximationVariance
+from MDP_solver_exact import MDPSolverExact, MDPSolverExactVariance
+from MDP_solver_approximation import MDPSolverApproximation, MDPSolverApproximationVariance
 import numpy as np
 import copy
-from environments.environment import Environment
-from policy import TabularPolicy
+from environments.environment import Environment, GridEnvironment
+from policy import Policy
 from agents.agent import Agent
 from time import time
-
+from abc import abstractmethod
 _largenum = 1000000
 
 
@@ -40,7 +40,8 @@ class Learner(Agent):
         agent_name: str,
         solver: MDP_solver.MDPSolver,
     ):
-        self.env = env
+        
+        super().__init__(env, agent_name)
         self.mu_demonstrator = mu_demonstrator
         self.theta_e = np.zeros(self.env.n_features)
         self.theta_v = np.zeros((self.env.n_features, self.env.n_features))
@@ -58,8 +59,6 @@ class Learner(Agent):
         self.solver = solver
         self.T = self.solver.T
 
-        self.agent_name = agent_name
-
     def compute_and_draw(
         self, show: bool = False, store: bool = False, fignum: int = 0
     ) -> None:
@@ -75,6 +74,8 @@ class Learner(Agent):
         fignum : int
             identifier number for figure
         """
+
+        #TODO rethink this function how to extract the thing common to all learners and env and what to put elsewhere
         self.policy = self.compute_policy()
 
         self.V = self.solver.compute_value_function_bellmann_averaged(
@@ -85,7 +86,7 @@ class Learner(Agent):
 
         self.draw(show, store, fignum)
 
-    def compute_policy(self):
+    def compute_policy(self) -> Policy:
         """
         Helper function to compute policy via SVI for the given reward parameters
 
@@ -96,34 +97,17 @@ class Learner(Agent):
         """
         self.reward = self.get_linear_reward()
         self.variance = self.get_variance()
-        _, _, pi_agent = self.solver.soft_value_iteration(
+        return self.solver.soft_value_iteration(
             self.env, dict(reward=self.reward, variance=self.variance)
         )
-        
-        return TabularPolicy(pi_agent)
 
+    @abstractmethod
+    def get_linear_reward(self) -> any:
+        pass
 
-    def get_linear_reward(self) -> np.ndarray:
-        """
-        computes the reward based on theta_e for every state
-
-        Returns
-        -------
-        reward : numpy.ndarray
-        """
-
-        return self.env.get_reward_for_given_theta(self.theta_e)
-
-    def get_variance(self) -> np.ndarray:
-        """
-        computes the variance term for every state needed for soft value iteration based on theta_v
-
-        Returns
-        -------
-        variance : numpy.ndarray
-        """
-
-        return self.env.get_variance_for_given_theta(self.theta_v)
+    @abstractmethod
+    def get_variance(self) -> any:
+       pass
 
     def get_mu_soft(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -155,8 +139,8 @@ class Learner(Agent):
             time used per iteration
         """
 
-        calc_theta_v = (isinstance(self.solver, MDPSolverExactVariance) or False)
-         #               isinstance(self.solver, MDPSolverApproximationVariance))
+        calc_theta_v = (isinstance(self.solver, MDPSolverExactVariance) or 
+                        isinstance(self.solver, MDPSolverApproximationVariance))
 
         theta_e_pos = np.zeros(self.env.n_features)
         theta_e_neg = np.zeros(self.env.n_features)
@@ -276,3 +260,111 @@ class Learner(Agent):
             print(f"Terminated in {t} iterations")
 
         return t, runtime
+    
+class TabularLearner(Learner):
+    """
+    Implementing an agent using either expectation matching / expectation and variance matching to solve an IRL problem.
+
+    Parameters
+    ----------
+    env : environment.Environment
+        the environment representing the setting of the problem
+    mu_demonstrator : tuple[float, float]
+        feature expectation and variance terms of the demonstrator
+    config_agent : dict[str: any]
+        different configuration parameters for the agent including
+        tol : convergence tolerance for batch_MCE
+        maxiter : maximal number of iterations for batch_MCE
+        miniter : minimal number of iterations for batch_MCE
+    agent_name : str
+        name of the agent
+    solver : MDPSolverExact
+        solver to use (either only expectation matching or also variance matching) (must be a tabular/exact solver)
+    """
+
+    def __init__(
+        self,
+        env: GridEnvironment,
+        mu_demonstrator: tuple[float, float],
+        config_agent: dict[str:any],
+        agent_name: str,
+        solver: MDPSolverExact,
+    ):
+
+        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver)
+
+    def get_linear_reward(self) -> np.ndarray:
+        """
+        computes the reward based on theta_e for every state
+
+        Returns
+        -------
+        reward : numpy.ndarray
+        """
+
+        return self.env.get_reward_for_given_theta(self.theta_e)
+
+    def get_variance(self) -> np.ndarray:
+        """
+        computes the variance term for every state needed for soft value iteration based on theta_v
+
+        Returns
+        -------
+        variance : numpy.ndarray
+        """
+
+        return self.env.get_variance_for_given_theta(self.theta_v)
+    
+class ApproximateLearner(Learner):
+    """
+    Implementing an agent using either expectation matching / expectation and variance matching to solve an IRL problem.
+
+    Parameters
+    ----------
+    env : environment.Environment
+        the environment representing the setting of the problem
+    mu_demonstrator : tuple[float, float]
+        feature expectation and variance terms of the demonstrator
+    config_agent : dict[str: any]
+        different configuration parameters for the agent including
+        tol : convergence tolerance for batch_MCE
+        maxiter : maximal number of iterations for batch_MCE
+        miniter : minimal number of iterations for batch_MCE
+    agent_name : str
+        name of the agent
+    solver : MDPSolverExact
+        solver to use (either only expectation matching or also variance matching) (must be an approximation solver)
+    """
+
+    def __init__(
+        self,
+        env: Environment,
+        mu_demonstrator: tuple[float, float],
+        config_agent: dict[str:any],
+        agent_name: str,
+        solver: MDPSolverApproximation,
+    ):
+        
+        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver)
+
+    def get_linear_reward(self) -> any:
+        """
+        creates a linear reward function w.r.t state observations based on theta_e
+
+        Returns
+        -------
+        reward : function
+        """
+
+        return lambda state: self.theta_e.dot(state)
+
+    def get_variance(self) -> any:
+        """
+        creates a quadratic function w.r.t state observations based on theta_v
+
+        Returns
+        -------
+        variance : function
+        """
+
+        return lambda state: (self.theta_v.dot(state)).dot(state)
