@@ -54,10 +54,12 @@ class CarRacingEnvironment(Environment):
         
         self._base_env = self.env
 
+        self.n_features = self.env.observation_space.sample().flatten().shape[0]
+
     def make_env(self):
         env_kwargs = {
             "render_mode": "rgb_array",
-            "continuous": False,
+            "continuous": True,
             "lap_complete_percent": self.lap_complete_percent,
             "domain_randomize": False
         }
@@ -132,13 +134,12 @@ class CarRacingEnvironment(Environment):
         fps : int
             frames per second
         """
-
         env = VecVideoRecorder(
             self.env,
             video_folder=os.path.dirname(f"recordings\car_racing\{strname}.mp4") or ".",
             record_video_trigger=lambda step: True,  # record first episode
             video_length=T,
-            name_prefix="car_racing",
+            name_prefix=f"car_racing_{strname}",
         )
 
         obs = env.reset()
@@ -174,7 +175,7 @@ class CarRacingEnvironment(Environment):
         reward : float
             true reward for the given policy (approximated based on trajectories)
         """
-        mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories, return_episode_rewards=True)
+        mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories)
         
         # TODO remove this once everything works as expected this was only in order to test whether or not overwriting the reward function works
         #mean_reward, std_reward = self.evaluate_policy_custom(agent.policy.model, self.env, n_trajectories)
