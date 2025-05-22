@@ -72,8 +72,10 @@ class MDPSolverExact(MDPSolver):
                     T_pi[t, :, n_s] += policy.pi[t, :, a] * env.T_matrix[:, n_s, a]
 
         return T_pi
-    
-    def get_T_pi_from_trajectory(self, env: Environment, trajectory: list[tuple[int,int,int,float]]) -> np.ndarray:
+
+    def get_T_pi_from_trajectory(
+        self, env: Environment, trajectory: list[tuple[int, int, int, float]]
+    ) -> np.ndarray:
         """
         computes state transition probability based on a fixed trajectory (treated as deterministic policy)
 
@@ -94,7 +96,7 @@ class MDPSolverExact(MDPSolver):
         length = min(len(trajectory), self.T)
 
         for i in range(length):
-            T_pi[i,trajectory[i][0], trajectory[i][2]] = 1.0
+            T_pi[i, trajectory[i][0], trajectory[i][2]] = 1.0
 
         return T_pi
 
@@ -132,7 +134,7 @@ class MDPSolverExact(MDPSolver):
 
         if self.compute_variance:
 
-                # Compute feature_products using batch matrix multiplication
+            # Compute feature_products using batch matrix multiplication
             feature_products = np.einsum("ai,bj->abij", feature_matrix, feature_matrix)
 
             # Compute variance using vectorized operations
