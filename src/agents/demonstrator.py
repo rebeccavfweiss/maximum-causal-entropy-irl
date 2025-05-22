@@ -5,8 +5,7 @@ from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
-from stable_baselines3 import PPO, SAC
-from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3 import PPO
 import os
 import numpy as np
 from operator import itemgetter
@@ -302,7 +301,7 @@ class CarRacingDemonstrator(Demonstrator):
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
-        time_steps: int = 1_000_000,
+        time_steps: int = 2_500_000,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
