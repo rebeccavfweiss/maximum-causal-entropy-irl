@@ -33,8 +33,8 @@ class CarRacingEnvironment(Environment):
 
         self.frame_width = env_args["width"]
         self.frame_height = env_args["height"]
-        self.n_colors = env_args["n_colors"]
         self.n_frames = env_args["n_frames"]
+        self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
 
         self.log_dir = "./experiments"
@@ -61,12 +61,14 @@ class CarRacingEnvironment(Environment):
             "render_mode": "rgb_array",
             "continuous": True,
             "lap_complete_percent": self.lap_complete_percent,
-            "domain_randomize": False
+            "domain_randomize": False,
+            "max_episode_steps": self.T
         }
         env = make_vec_env(
             "CarRacing-v3",
             n_envs=1,
             wrapper_class=WarpFrame,
+            wrapper_kwargs={'width': self.frame_width, 'height': self.frame_height},
             env_kwargs=env_kwargs
         )
 
@@ -144,12 +146,13 @@ class CarRacingEnvironment(Environment):
 
         obs = env.reset()
         terminated = False
+        truncated = False
         step = 0
         total_reward = 0
 
-        while (not terminated) and (step < T):
+        while (not (terminated or truncated)) and (step < T):
             action = policy.predict(obs, step)
-            obs, reward, terminated, _ = env.step(action)
+            obs, reward, terminated, truncated = env.step(action)
             step += 1
             total_reward += reward
 
@@ -175,10 +178,10 @@ class CarRacingEnvironment(Environment):
         reward : float
             true reward for the given policy (approximated based on trajectories)
         """
-        mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories)
+        #mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories)
         
         # TODO remove this once everything works as expected this was only in order to test whether or not overwriting the reward function works
-        #mean_reward, std_reward = self.evaluate_policy_custom(agent.policy.model, self.env, n_trajectories)
+        mean_reward, std_reward = self.evaluate_policy_custom(agent.policy.model, self.env, n_trajectories, T)
         print(f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
 
         return mean_reward
@@ -196,6 +199,7 @@ class CarRacingEnvironment(Environment):
         model,
         vec_env: VecEnv,
         n_eval_episodes: int = 5,
+        T:int=1000,
         deterministic: bool = True,
         render: bool = False,
     ) -> tuple[float, float]:
@@ -212,16 +216,18 @@ class CarRacingEnvironment(Environment):
         for _ in range(n_eval_episodes):
             obs = vec_env.reset()
             done = False
+            truncated = False
             total_reward = 0.0
-
-            while not done:
+            t=1
+            while (not (done or truncated)) and t<T:
                 action, _ = model.predict(obs, deterministic=deterministic)
-                obs, reward, done, info = vec_env.step(action)
+                obs, reward, done, truncated = vec_env.step(action)
 
                 total_reward += reward[0]  # reward is vectorized: shape (n_envs,)
 
                 if render:
                     vec_env.render()
+                t+=1
 
             episode_rewards.append(total_reward)
 
