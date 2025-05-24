@@ -61,8 +61,10 @@ class MDPSolver(ABC):
             if ((env.terminal_states is not None) and (state in env.terminal_states)) or (t == self.T):
                 break
             action = policy.predict(state, t)
-            next_state, reward, _, _ = env.step(action)
+            next_state, reward, done, truncated = env.step(action)
             episode.append((state, action, next_state, reward))
+            if done or truncated:
+                break
             state = next_state
 
         return episode
