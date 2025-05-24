@@ -9,6 +9,7 @@ from stable_baselines3 import PPO
 import os
 import numpy as np
 from operator import itemgetter
+import utils
 
 
 class Demonstrator(Agent):
@@ -307,18 +308,24 @@ class CarRacingDemonstrator(Demonstrator):
 
         self.model_path = "./models/ppo_carracing.zip"
 
+        utils.create_logger("demonstrator_log")
+
         self.policy = self.__train_demonstrator(time_steps)
 
+        utils.log("Start computing feature expectations and variance")
         self.mu_demonstrator = self.get_mu_using_reward_features()
+        utils.log("Finished feature values computation")
 
     def __train_demonstrator(self, time_steps: int):
         if os.path.exists(self.model_path):
-            print("Loading existing model")
+            utils.log("Loading existing model", verbose=True)
             model = PPO.load(self.model_path, env=self.env.env)
 
         else:
+            utils.log("Training new model", verbose=True)
             model = PPO("CnnPolicy", self.env.env, verbose=0)
             model.learn(total_timesteps=time_steps, progress_bar=True, callback=self.env.eval_callback)
             model.save(self.model_path)
+            utils.log("Training demonstrator done", verbose=True)
 
         return ModelPolicy(model)
