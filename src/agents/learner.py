@@ -9,6 +9,7 @@ from agents.agent import Agent
 from time import time
 import torch
 from abc import abstractmethod
+from utils import log
 _largenum = 1000000
 
 
@@ -166,10 +167,9 @@ class Learner(Agent):
                 optimizer_v, lr_lambda=lr_lambda
             )
 
-        mu_reward_agent, mu_variance_agent = self.get_mu_soft()
+        #mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
-        if verbose:
-            print("\n========== batch_MCE for " + self.agent_name + " =======")
+        log("\n========== batch_MCE for " + self.agent_name + " =======", verbose)
 
         t = 1
         while True:
@@ -181,8 +181,9 @@ class Learner(Agent):
                 self.theta_v = theta_v.detach().numpy()
 
             # Recompute agent feature expectations
+            log("Start approximate SVI", verbose)
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
-
+            log("Finish approximate SVI", verbose)
             # Compute gradient for reward part
             grad_e = torch.tensor(
                 mu_reward_agent - self.mu_demonstrator[0], dtype=torch.float32
@@ -217,12 +218,11 @@ class Learner(Agent):
             if calc_theta_v:
                 theta_v_diff = torch.norm(theta_v.grad).item()
 
-            if verbose:
-                print(
-                    f"t={t}, lr={scheduler_e.get_last_lr()}, theta_e_diff={theta_e_diff}"
-                )
-                if calc_theta_v:
-                    print(f"theta_v_diff={theta_v_diff}")
+            log(
+                f"t={t}, lr={scheduler_e.get_last_lr()}, theta_e_diff={theta_e_diff}", verbose
+            )
+            if calc_theta_v:
+                log(f"theta_v_diff={theta_v_diff}", verbose)
 
             if theta_e_diff < self.tol and (
                 not calc_theta_v or theta_v_diff < 5 * self.tol
@@ -240,8 +240,7 @@ class Learner(Agent):
         if calc_theta_v:
             self.theta_v = theta_v.detach().numpy()
 
-        if verbose:
-            print(f"Terminated in {t} iterations")
+        log(f"Terminated in {t} iterations", verbose)
 
         return t, runtime
     
