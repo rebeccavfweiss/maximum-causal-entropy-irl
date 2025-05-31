@@ -35,3 +35,23 @@ def log(msg:str, verbose:bool=False) -> None:
     logging.info(msg)
     if verbose:
         print(msg)
+
+def is_truncated_from_infos(infos:list[dict])->bool:
+    """
+    Given a list of info dicts (one per env), return True if any of the dicts
+    contain a key with 'truncated' in its name and that value is True.
+
+    Parameters
+    ----------
+    infos : list[dict]
+        List of info dictionaries returned from a VecEnv.
+
+    Returns
+    -------
+    bool
+        True if any truncated-related key is True in any info dict.
+    """
+    for info in infos:
+        if any(key.lower().find('truncated') != -1 and info[key] for key in info):
+            return True
+    return False
