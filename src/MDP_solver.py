@@ -2,6 +2,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from environments.environment import Environment
 from policy import Policy
+import utils
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
@@ -61,9 +62,9 @@ class MDPSolver(ABC):
             if ((env.terminal_states is not None) and (state in env.terminal_states)) or (t == self.T):
                 break
             action = policy.predict(state, t)
-            next_state, reward, done, truncated = env.step(action)
+            next_state, reward, done, info = env.step(action)
             episode.append((state, action, next_state, reward))
-            if done or truncated:
+            if done or utils.is_truncated_from_infos(info):
                 break
             state = next_state
 
