@@ -13,6 +13,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 import os
 import numpy as np
+import utils
 
 
 class CarRacingEnvironment(Environment):
@@ -146,13 +147,13 @@ class CarRacingEnvironment(Environment):
 
         obs = env.reset()
         terminated = False
-        truncated = False
+        info = []
         step = 0
         total_reward = 0
 
-        while (not (terminated or truncated)) and (step < T):
+        while (not (terminated or utils.is_truncated_from_infos(info))) and (step < T):
             action = policy.predict(obs, step)
-            obs, reward, terminated, truncated = env.step(action)
+            obs, reward, terminated, info = env.step(action)
             step += 1
             total_reward += reward
 
@@ -216,13 +217,14 @@ class CarRacingEnvironment(Environment):
         for _ in range(n_eval_episodes):
             obs = vec_env.reset()
             done = False
-            truncated = False
+            info = []
             total_reward = 0.0
             t=1
-            while (not (done or truncated)) and t<T:
+            while (not (done or utils.is_truncated_from_infos(info))) and t<=T:
                 action, _ = model.predict(obs, deterministic=deterministic)
-                obs, reward, done, truncated = vec_env.step(action)
-
+                
+                obs, reward, done, info = vec_env.step(action)
+                
                 total_reward += reward[0]  # reward is vectorized: shape (n_envs,)
 
                 if render:
