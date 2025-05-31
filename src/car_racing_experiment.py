@@ -4,37 +4,19 @@ from environments.car_racing_environment import CarRacingEnvironment
 from MDP_solver_approximation import MDPSolverApproximationExpectation, MDPSolverApproximationVariance
 import numpy as np
 import psutil
-import logging
-import os
+from utils import create_logger, log
 import gc
 
-# Create logs directory if needed
-os.makedirs("logs", exist_ok=True)
 
-# Configure logging
-logging.basicConfig(
-    filename="logs/experiment_log.txt",
-    filemode="w",  # Overwrite on each run. Use "a" to append.
-    format="%(asctime)s - %(message)s",
-    level=logging.INFO
-)
-
-def log(msg, verbose=False):
-    logging.info(msg)
-    if verbose:
-        print(msg)
-
-
-
-def create_carracing_env(lap_complete_percent:float=0.95):
+def create_carracing_env(lap_complete_percent:float=0.95, T:int = 1000):
 
     config_env = {
         "gamma": 1.0,
         "lap_complete_percent": lap_complete_percent,
+        "T":T,
         "n_frames" : 4,
-        "width": 96,
-        "height": 96,
-        "n_colors":6,
+        "width": 84,
+        "height": 84,
     }
 
     env = CarRacingEnvironment(config_env)
@@ -54,18 +36,22 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    verbose = True
+    verbose = False
 
-    maxiter = 2
-    n_trajectories = 3
-    sac_timesteps = 10
-    sac_buffer_size = 75000
-    T = 1000
+    maxiter = 30
+    n_trajectories = 100
+    sac_timesteps = 7500
+    sac_buffer_size = 50000
+    # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
+    lap_percent_complete=0.95
+    T = 200
+
+    create_logger("medium_experiment_log")
 
     log_memory("Start", verbose)
 
     # create the environment
-    env = create_carracing_env()
+    env = create_carracing_env(lap_complete_percent=lap_percent_complete, T=T)
 
     # Learner config
     config_default_learner = create_config_learner(n_trajectories, maxiter)
