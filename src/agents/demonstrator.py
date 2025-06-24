@@ -6,10 +6,17 @@ from environments.minigrid_environment import MinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import CallbackList
+from utils import TimedEvalCallback
 import os
 import numpy as np
 from operator import itemgetter
 import utils
+import wandb
+from wandb.integration.sb3 import WandbCallback
+from pathlib import Path
+
+os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 
 
 class Demonstrator(Agent):
@@ -302,30 +309,43 @@ class CarRacingDemonstrator(Demonstrator):
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
-        time_steps: int = 2_500_000,
+        time_steps: int = 1_250_000,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
-        self.model_path = "./models/ppo_carracing.zip"
+        self.model_path = Path("models") / "car_racing" /"ppo_carracing.zip"
+        self.log_dir = Path("experiments") /"car_racing"/"demonstrator"
 
-        utils.create_logger("demonstrator_log")
 
         self.policy = self.__train_demonstrator(time_steps)
 
-        utils.log("Start computing feature expectations and variance")
         self.mu_demonstrator = self.get_mu_using_reward_features()
-        utils.log("Finished feature values computation")
 
     def __train_demonstrator(self, time_steps: int):
         if os.path.exists(self.model_path):
-            utils.log("Loading existing model", verbose=True)
+            wandb.log({"use_pretrained_model": True})
             model = PPO.load(self.model_path, env=self.env.env)
 
         else:
-            utils.log("Training new model", verbose=True)
+            wandb.log({"use_pretrained_model": False})
             model = PPO("CnnPolicy", self.env.env, verbose=0)
-            model.learn(total_timesteps=time_steps, progress_bar=True, callback=self.env.eval_callback)
-            model.save(self.model_path)
-            utils.log("Training demonstrator done", verbose=True)
+
+            callback = CallbackList([
+                        TimedEvalCallback(self.env.env_val,
+                             best_model_save_path=self.model_path,
+                             log_path=self.log_dir,
+                             eval_freq=25_000,
+                             render=False,
+                             n_eval_episodes=10),
+                        WandbCallback(model_save_path=self.model_path, verbose=1)])
+            
+            model.learn(total_timesteps=time_steps, progress_bar=True, callback=callback)
+
+            artifact = wandb.Artifact(f"demonstrator_model", type="model")
+            artifact.add_file(self.model_path)
+            wandb.log_artifact(artifact)
+
+            #actually use best model and not last
+            model = PPO.load(self.model_path)
 
         return ModelPolicy(model)
