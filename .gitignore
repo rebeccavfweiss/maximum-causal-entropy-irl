@@ -6,3 +6,4 @@ experiments
 recordings
 models
 logs
+wandb
