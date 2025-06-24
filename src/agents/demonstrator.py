@@ -11,7 +11,6 @@ from utils import TimedEvalCallback
 import os
 import numpy as np
 from operator import itemgetter
-import utils
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from pathlib import Path
