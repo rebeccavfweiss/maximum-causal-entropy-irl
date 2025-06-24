@@ -3,6 +3,7 @@ import agents.demonstrator as demonstrator
 from environments.simple_environment import SimpleEnvironment
 import MDP_solver_exact as MDPSolver
 import numpy as np
+import wandb
 
 
 def create_simple_env():
@@ -27,10 +28,19 @@ if __name__ == "__main__":
 
     show = False
     store = False
-    verbose = False
+    experiment_name = "simple"
 
     T = 20
     n_trajectories = None
+
+    wandb.init(
+        project="mceirl-car-racing",
+        name=f"{experiment_name}-run",
+        config={
+            "n_trajectories": n_trajectories,
+            "T": T
+        }
+    )
 
     # create the environment
     env = create_simple_env()
@@ -41,22 +51,15 @@ if __name__ == "__main__":
     # create demonstrator
     demo = demonstrator.SimpleDemonstrator(env, demonstrator_name="SimpleDemonstrator", T=T, n_trajectories=n_trajectories)
 
-    demo.draw(show, store, 0)
-    print("Demonstrator's expected value: ", demo.mu_demonstrator[0])
-    print("Demonstrator's variance: ", demo.mu_demonstrator[1])
-
-    if verbose:
-        print("Demonstrator done")
+    demo.render(show, store, 0)
 
     reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)
 
-    print("-- Results --")
 
-    print("----- Demonstrator -----")
-    print("reward: ", reward_demonstrator)
-    if verbose:
-        print("theta_*: ", env.theta_reward)
-        print("")
+    wandb.log({"demonstrator_expected_value" : demo.mu_demonstrator[0],
+        "demonstrator_variance": demo.mu_demonstrator[1],
+        "demonstrator_reward": reward_demonstrator,
+        "theta_*": env.theta_reward})
 
     # create agent that uses only expectation matching
     agent_expectation = learner.TabularLearner(
@@ -66,35 +69,18 @@ if __name__ == "__main__":
         agent_name="Agent Expectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
     )
-    iter_expectation, time_expectation = agent_expectation.batch_MCE(verbose=verbose)
+    iter_expectation, time_expectation = agent_expectation.batch_MCE()
     agent_expectation.compute_and_draw(show, store, 2)
     reward_expectation = env.compute_true_reward_for_agent(
         agent_expectation, n_trajectories, T
     )
-
-    if verbose:
-        print("First agent done")
-
-
-    print("----- Expectation -----")
-    print(
-        "reward: ",
-        reward_expectation,
-        " (diff. to demonstrator: ",
-        np.abs(reward_demonstrator - reward_expectation),
-        ")",
-    )
-    if verbose:
-        print("theta_e: ", agent_expectation.theta_e)
-
-    print("iterations used: ", iter_expectation)
-    print(
-        "time used (total/ avg. per iteration): ",
-        sum(time_expectation),
-        "/",
-        np.mean(time_expectation),
-    )
-    print("")
+    wandb.log({
+        "reward_expectation": reward_expectation,
+        "reward_diff_expectation": np.abs(reward_demonstrator - reward_expectation),
+        "iterations_expectation": iter_expectation,
+        "time_total_expectation": sum(time_expectation),
+        "time_avg_per_iter_expectation": np.mean(time_expectation),
+    })
 
     # create agent that also matches variances
     agent_variance = learner.TabularLearner(
@@ -104,31 +90,19 @@ if __name__ == "__main__":
         agent_name="Agent Variance",
         solver=MDPSolver.MDPSolverExactVariance(T),
     )
-    iter_variance, time_variance = agent_variance.batch_MCE(verbose=verbose)
+    iter_variance, time_variance = agent_variance.batch_MCE()
     agent_variance.compute_and_draw(show, store, 4)
     reward_variance = env.compute_true_reward_for_agent(
         agent_variance, n_trajectories, T
     )
 
-    if verbose:
-        print("Second agent done")
+    wandb.log({
+        "reward_variance": reward_variance,
+        "reward_diff_variance": np.abs(reward_demonstrator - reward_variance),
+        "iterations_variance": iter_variance,
+        "time_total_variance": sum(time_variance),
+        "time_avg_per_iter_variance": np.mean(time_variance),
+    })
 
-    print("----- Expectation + Variance -----")
-    print(
-        "reward: ",
-        reward_variance,
-        " (diff. to demonstrator: ",
-        np.abs(reward_demonstrator - reward_variance),
-        ")",
-    )
-    if verbose:
-        print("theta_e: ", agent_variance.theta_e)
-        print("theta_v: ", agent_variance.theta_v)
 
-    print("iterations used: ", iter_variance)
-    print(
-        "time used (total/ avg. per iteration): ",
-        sum(time_variance),
-        "/",
-        np.mean(time_variance),
-    )
+    wandb.finish()
