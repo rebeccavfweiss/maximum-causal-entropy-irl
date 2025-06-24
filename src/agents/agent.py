@@ -2,6 +2,7 @@
 
 from abc import ABC
 from environments.environment import Environment
+from pathlib import Path 
 
 class Agent(ABC):
     """
@@ -23,7 +24,7 @@ class Agent(ABC):
         self.T = None
 
 
-    def draw(self, show: bool = False, store: bool = False, fignum: int = 0) -> None:
+    def render(self, show: bool = False, store: bool = False, fignum: int = 0) -> Path:
         """
         draws the policy of the demonstrator as long as it has been computed before, else a warning is thrown
 
@@ -35,10 +36,15 @@ class Agent(ABC):
             whether or not the plot should be stored
         fignum : int
             identifier number for the figure
+
+        Returns
+        -------
+        path : Path
+            path to the stored video (for the car racing environment) and None else
         """
 
         
-        self.env.render(
+        return self.env.render(
             V=self.V,
             policy=self.policy,
             reward=self.env.reward,
