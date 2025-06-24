@@ -1,13 +1,21 @@
 import numpy as np
-import copy
+from pathlib import Path
 from MDP_solver import MDPSolver
 from environments.environment import Environment
 from policy import Policy, ModelPolicy
 from stable_baselines3 import SAC
+from stable_baselines3.common.callbacks import CallbackList
+from utils import TimedEvalCallback
+from wandb.integration.sb3 import WandbCallback
+
+import os
+os.environ["WANDB_DISABLE_SYMLINK"] = "true"
+
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
 np.set_printoptions(linewidth=500)
+
 
 class MDPSolverApproximation(MDPSolver):
     """
@@ -25,17 +33,35 @@ class MDPSolverApproximation(MDPSolver):
         timesteps for embedded SAC training in the approximated SVI
     sac_buffer_size : int
         buffer size for embedded SAC training in the approximated SVI
+    log_dir : str
+        logging directory
+    model_dir : str
+        local model storage directory
     """
 
-    def __init__(self, T: int, compute_variance: bool, sac_timesteps:int = 10000, sac_buffer_size:int=100000):
-        #TODO add parameters for SAC learning
+    def __init__(
+        self,
+        T: int,
+        compute_variance: bool,
+        sac_timesteps: int = 10000,
+        sac_buffer_size: int = 100000,
+        log_dir: str = None,
+        model_dir: str = None,
+    ):
+
         super().__init__(T, compute_variance)
 
         self.sac_timesteps = sac_timesteps
         self.sac_buffer_size = sac_buffer_size
 
+        self.log_dir = log_dir
+        self.model_dir = model_dir
+
     def compute_feature_SVF_bellmann(
-        self, env: Environment, policy: Policy, trajectory:list[tuple[int,int,int,float]]=None
+        self,
+        env: Environment,
+        policy: Policy,
+        trajectory: list[tuple[int, int, int, float]] = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         computes feature SVF
@@ -54,18 +80,22 @@ class MDPSolverApproximation(MDPSolver):
         feature_expectation : ndarray
         feature_variance : ndarray
         """
-        feature_sum = trajectory[0][0].flatten() + sum(env.gamma**(t+1)*trajectory[t][2].flatten() for t in range(len(trajectory)))
+        feature_sum = trajectory[0][0].flatten() + sum(
+            env.gamma ** (t + 1) * trajectory[t][2].flatten()
+            for t in range(len(trajectory))
+        )
 
         feature_sum = feature_sum.astype(np.float32)
 
         if self.compute_variance:
             feature_sum_prod = np.outer(feature_sum, feature_sum)
         else:
-            feature_sum_prod = np.zeros((feature_sum.shape[0], feature_sum.shape[0]), dtype=np.float32)
-
+            feature_sum_prod = np.zeros(
+                (feature_sum.shape[0], feature_sum.shape[0]), dtype=np.float32
+            )
 
         return feature_sum, feature_sum_prod
-    
+
 
 class MDPSolverApproximationExpectation(MDPSolverApproximation):
     """
@@ -73,6 +103,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
     Parameters
     ----------
+    experiment_name : str
+        name for the experiment that will be used in naming logging/storage directories
     T : int
         finite horizon value
     compute_variance : bool
@@ -83,12 +115,24 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         buffer size for embedded SAC training in the approximated SVI
     """
 
-    def __init__(self, T: int = 45, compute_variance: bool = False, sac_timesteps:int=10000, sac_buffer_size:int=100000):
-        super().__init__(T, compute_variance, sac_timesteps, sac_buffer_size)
-    
-    def soft_value_iteration(
-        self, env: Environment, values: dict[str:any]
-    ) -> Policy:
+    def __init__(
+        self,
+        experiment_name: str,
+        T: int = 45,
+        compute_variance: bool = False,
+        sac_timesteps: int = 10000,
+        sac_buffer_size: int = 100000,
+    ):
+        super().__init__(
+            T,
+            compute_variance,
+            sac_timesteps,
+            sac_buffer_size,
+            log_dir=Path("experiments")/experiment_name/"agent_expectation",
+            model_dir=Path("models")/experiment_name/"agent_expectation",
+        )
+
+    def soft_value_iteration(self, env: Environment, values: dict[str:any]) -> Policy:
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -109,19 +153,40 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size)
 
-        model.learn(total_timesteps=self.sac_timesteps)
+        callback = CallbackList(
+            [
+                TimedEvalCallback(
+                    env.env,
+                    best_model_save_path=self.model_dir,
+                    log_path=self.log_dir,
+                    eval_freq=max(10, int(self.sac_timesteps / 100)),
+                    render=False,
+                    n_eval_episodes=5,
+                ),
+                WandbCallback(model_save_path=self.model_dir, verbose=1),
+            ]
+        )
 
-        model.save("models/agent_expectation")
+        model.learn(
+            total_timesteps=self.sac_timesteps, callback=callback, progress_bar=True
+        )
 
         env.reset_reward_function()
 
-        return ModelPolicy(model)
+        model = SAC.load(self.model_dir/"best_model")
+
+        # actually return best trained model and not last
+        return ModelPolicy(SAC.load(self.model_dir/"best_model"))
+
+
 class MDPSolverApproximationVariance(MDPSolverApproximation):
     """
     MDP solver that uses feature expectation and variance matching using an approximation for Soft Value Iteration by using a Soft Critic Actor algorithm
 
     Parameters
     ----------
+    experiment_name : str
+        name for the experiment that will be used in naming logging/storage directories
     T : int
         finite horizon value
     compute_variance : bool
@@ -132,12 +197,24 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         buffer size for embedded SAC training in the approximated SVI
     """
 
-    def __init__(self, T: int = 45, compute_variance: bool = True, sac_timesteps:int =10000, sac_buffer_size:int=100000):
-        super().__init__(T, compute_variance, sac_timesteps, sac_buffer_size)
-    
-    def soft_value_iteration(
-        self, env: Environment, values: dict[str:any]
-    ) -> Policy:
+    def __init__(
+        self,
+        experiment_name: str,
+        T: int = 45,
+        compute_variance: bool = True,
+        sac_timesteps: int = 10000,
+        sac_buffer_size: int = 100000,
+    ):
+        super().__init__(
+            T,
+            compute_variance,
+            sac_timesteps,
+            sac_buffer_size,
+            log_dir=Path("experiments")/experiment_name/"agent_variance",
+            model_dir=Path("models")/experiment_name/"agent_variance",
+        )
+
+    def soft_value_iteration(self, env: Environment, values: dict[str:any]) -> Policy:
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -155,14 +232,31 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         """
 
         # Assumption: gamma = 1 in order to simplify reward term
-        env.set_custom_reward_function(lambda s: values["reward"](s.flatten())+ values["variance"](s.flatten()))
+        env.set_custom_reward_function(
+            lambda s: values["reward"](s.flatten()) + values["variance"](s.flatten())
+        )
 
         model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size)
 
-        model.learn(total_timesteps=self.sac_timesteps)
+        callback = CallbackList(
+            [
+                TimedEvalCallback(
+                    env.env,
+                    best_model_save_path=self.model_dir,
+                    log_path=self.log_dir,
+                    eval_freq=max(10, int(self.sac_timesteps / 100)),
+                    render=False,
+                    n_eval_episodes=5,
+                ),
+                WandbCallback(model_save_path=self.model_dir, verbose=1),
+            ]
+        )
 
-        model.save("models/agent_variance")
+        model.learn(
+            total_timesteps=self.sac_timesteps, callback=callback, progress_bar=True
+        )
 
         env.reset_reward_function()
 
-        return ModelPolicy(model)
+        # actually return best trained model and not last
+        return ModelPolicy(SAC.load(self.model_dir / "best_model"))
