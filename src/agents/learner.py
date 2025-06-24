@@ -2,14 +2,13 @@ import MDP_solver
 from MDP_solver_exact import MDPSolverExact, MDPSolverExactVariance
 from MDP_solver_approximation import MDPSolverApproximation, MDPSolverApproximationVariance
 import numpy as np
-import copy
+import wandb
 from environments.environment import Environment, GridEnvironment
 from policy import Policy
 from agents.agent import Agent
 from time import time
 import torch
 from abc import abstractmethod
-from utils import log
 _largenum = 1000000
 
 
@@ -32,6 +31,8 @@ class Learner(Agent):
         name of the agent
     solver : MDPSolver.MDPSolver
         solver to use (either only expectation matching or also variance matching)
+    learning_rate
+        custom learning rate function for MCE IRL
     """
 
     def __init__(
@@ -41,6 +42,7 @@ class Learner(Agent):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDP_solver.MDPSolver,
+        learning_rate = None
     ):
         
         super().__init__(env, agent_name)
@@ -52,6 +54,8 @@ class Learner(Agent):
         self.maxiter = config_agent["maxiter"]
         self.miniter = config_agent["miniter"]
         self.n_trajectories = config_agent.get("n_trajectories", None)
+
+        self.learning_rate = learning_rate
 
         self.theta_upperBound = _largenum
 
@@ -86,7 +90,11 @@ class Learner(Agent):
             dict(reward=self.env.reward),
         )  # compute the value function w.r.t to true reward parameters
 
-        self.draw(show, store, fignum)
+
+        path_to_file = self.render(show, store, fignum)
+        if path_to_file is not None:
+            #log a video to see how the current policy is doing
+            wandb.log({f"final/video_{self.agent_name}": wandb.Video(path_to_file, fps=4, format="mp4")})
 
     def compute_policy(self) -> Policy:
         """
@@ -117,21 +125,17 @@ class Learner(Agent):
 
         Returns
         -------
-        feature expectation and variance, once restricted to the reward features, once the full arrays
+        feature expectation and variance, trained policy
         """
-        pi_agent = self.compute_policy()
-        return self.solver.compute_feature_SVF_bellmann_averaged(self.env, pi_agent, self.n_trajectories)
+        self.policy = self.compute_policy()
 
-    def batch_MCE(self, verbose: bool = True) -> tuple[int, list[float]]:
+        return self.solver.compute_feature_SVF_bellmann_averaged(self.env, self.policy, self.n_trajectories)
+
+    def batch_MCE(self) -> tuple[int, list[float]]:
         """
         implementation of Algorithm 1
 
         computes dual ascent of soft value iteration of gradient descent of the thetas until convergence
-
-        Parameters
-        ----------
-        verbose : bool
-            whether or not intermediate output should be displayed (by default true)
 
         Returns
         -------
@@ -152,7 +156,10 @@ class Learner(Agent):
         # Initialize PyTorch tensors for thetas
         theta_e = torch.zeros(self.env.n_features, requires_grad=True)
         optimizer_e = torch.optim.Adam([theta_e], lr=initial_lr)
-        lr_lambda = lambda step: max(gamma ** np.log(step + 1), min_lr / initial_lr)
+        if self.learning_rate is None:
+            lr_lambda = lambda step: max(gamma ** np.log(step + 1), min_lr / initial_lr)
+        else:
+            lr_lambda = self.learning_rate
         scheduler_e = torch.optim.lr_scheduler.LambdaLR(
             optimizer_e, lr_lambda=lr_lambda
         )
@@ -167,10 +174,6 @@ class Learner(Agent):
                 optimizer_v, lr_lambda=lr_lambda
             )
 
-        #mu_reward_agent, mu_variance_agent = self.get_mu_soft()
-
-        log("\n========== batch_MCE for " + self.agent_name + " =======", verbose)
-
         t = 1
         while True:
             start = time()
@@ -181,9 +184,14 @@ class Learner(Agent):
                 self.theta_v = theta_v.detach().numpy()
 
             # Recompute agent feature expectations
-            log("Start approximate SVI", verbose)
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
-            log("Finish approximate SVI", verbose)
+
+            if t%2 == 0:
+                path_to_file = self.render(False, True)
+                if path_to_file is not None:
+                    #log a video to see how the current policy is doing
+                    wandb.log({f"eval/video_{self.agent_name}": wandb.Video(path_to_file, fps=4, format="mp4")})
+
             # Compute gradient for reward part
             grad_e = torch.tensor(
                 mu_reward_agent - self.mu_demonstrator[0], dtype=torch.float32
@@ -218,11 +226,14 @@ class Learner(Agent):
             if calc_theta_v:
                 theta_v_diff = torch.norm(theta_v.grad).item()
 
-            log(
-                f"t={t}, lr={scheduler_e.get_last_lr()}, theta_e_diff={theta_e_diff}", verbose
-            )
-            if calc_theta_v:
-                log(f"theta_v_diff={theta_v_diff}", verbose)
+
+            wandb.log({
+                f"step_{self.agent_name}": t,
+                f"theta_e_diff_{self.agent_name}": theta_e_diff,
+                f"lr_e_{self.agent_name}": scheduler_e.get_last_lr()[0],
+                f"grad_norm_theta_e_{self.agent_name}": torch.norm(theta_e.grad).item(),
+                **({f"theta_v_diff_{self.agent_name}": theta_v_diff, f"grad_norm_theta_v_{self.agent_name}": torch.norm(theta_v.grad).item()} if calc_theta_v else {})
+            })
 
             if theta_e_diff < self.tol and (
                 not calc_theta_v or theta_v_diff < 5 * self.tol
@@ -230,7 +241,7 @@ class Learner(Agent):
                 if t >= self.miniter:
                     break
 
-            if t > self.maxiter:
+            if t >= self.maxiter:
                 break
 
             t += 1
@@ -239,8 +250,6 @@ class Learner(Agent):
         self.theta_e = theta_e.detach().numpy()
         if calc_theta_v:
             self.theta_v = theta_v.detach().numpy()
-
-        log(f"Terminated in {t} iterations", verbose)
 
         return t, runtime
     
@@ -263,6 +272,8 @@ class TabularLearner(Learner):
         name of the agent
     solver : MDPSolverExact
         solver to use (either only expectation matching or also variance matching) (must be a tabular/exact solver)
+    learning_rate
+        custom learning rate (decreasing) function
     """
 
     def __init__(
@@ -272,9 +283,10 @@ class TabularLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverExact,
+        learning_rate = None
     ):
 
-        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver)
+        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver, learning_rate)
 
     def get_linear_reward(self) -> np.ndarray:
         """
@@ -317,6 +329,8 @@ class ApproximateLearner(Learner):
         name of the agent
     solver : MDPSolverExact
         solver to use (either only expectation matching or also variance matching) (must be an approximation solver)
+    learning_rate
+        custom learning rate (decreasing) function
     """
 
     def __init__(
@@ -326,9 +340,10 @@ class ApproximateLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverApproximation,
+        learning_rate = None
     ):
         
-        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver)
+        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver, learning_rate)
 
     def get_linear_reward(self) -> any:
         """
