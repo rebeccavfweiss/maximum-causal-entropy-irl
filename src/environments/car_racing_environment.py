@@ -7,13 +7,13 @@ from stable_baselines3.common.vec_env import (
     VecEnv
 )
 from stable_baselines3.common.atari_wrappers import WarpFrame
-from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
 import os
 import numpy as np
 import utils
+from pathlib import Path
 
 
 class CarRacingEnvironment(Environment):
@@ -38,20 +38,13 @@ class CarRacingEnvironment(Environment):
         self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
 
-        self.log_dir = "./experiments"
+        self.log_dir = Path("experiments")
 
         env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
         self.env = VecTransposeImage(env)
 
         env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
         self.env_val = VecTransposeImage(env)
-
-        self.eval_callback = EvalCallback(self.env_val,
-                             best_model_save_path=self.log_dir,
-                             log_path=self.log_dir,
-                             eval_freq=25_000,
-                             render=False,
-                             n_eval_episodes=5)
         
         self._base_env = self.env
 
@@ -120,7 +113,7 @@ class CarRacingEnvironment(Environment):
         strname: str = "",
         fps: int = 1,
         **kwargs,
-    ) -> None:
+    ) -> Path:
         """
         Function to record a video of the given policy in the environment
 
@@ -136,6 +129,11 @@ class CarRacingEnvironment(Environment):
             file name to store
         fps : int
             frames per second
+
+        Returns
+        -------
+        path : Path
+            path to the file in which the video is stored
         """
         env = VecVideoRecorder(
             self.env,
@@ -161,6 +159,8 @@ class CarRacingEnvironment(Environment):
 
         env.close()
 
+        return Path("recordings")/ "car_racing"/ f"car_racing_{strname}-step-0-to-step-{T}.mp4"
+
     def compute_true_reward_for_agent(
         self, agent, n_trajectories: int = None, T: int = None
     ) -> float:
@@ -181,7 +181,6 @@ class CarRacingEnvironment(Environment):
         """
         #mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories)
         
-        # TODO remove this once everything works as expected this was only in order to test whether or not overwriting the reward function works
         mean_reward, std_reward = self.evaluate_policy_custom(agent.policy.model, self.env, n_trajectories, T)
         print(f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
 
