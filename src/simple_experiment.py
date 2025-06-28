@@ -34,7 +34,7 @@ if __name__ == "__main__":
     n_trajectories = None
 
     wandb.init(
-        project="mceirl-car-racing",
+        project="mceirl-simple",
         name=f"{experiment_name}-run",
         config={
             "n_trajectories": n_trajectories,
