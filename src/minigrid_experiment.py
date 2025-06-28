@@ -69,7 +69,7 @@ if __name__ == "__main__":
                 # create demonstrator
                 demo = demonstrator.CrossingMinigridDemonstrator(
                     env,
-                    demonstrator_name="GymDemonstrator",
+                    demonstrator_name="MiniGridDemonstrator",
                     T=T,
                     n_trajectories=n_trajectories
                 )
