@@ -66,7 +66,7 @@ if __name__ == "__main__":
         env,
         demo.mu_demonstrator,
         config_default_learner,
-        agent_name="Agent Expectation",
+        agent_name="AgentExpectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         env,
         demo.mu_demonstrator,
         config_default_learner,
-        agent_name="Agent Variance",
+        agent_name="AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
     )
     iter_variance, time_variance = agent_variance.batch_MCE()
