@@ -26,7 +26,7 @@ def create_minigrid_env(grid_size: int = 9):
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.005, "miniter": 1, "maxiter": 3000}
+    config_default_learner = {"tol": 0.005, "miniter": 1, "maxiter": 5000}
 
     return config_default_learner
 
@@ -45,7 +45,6 @@ def run_experiment(args):
         reinit="finish_previous"
     )
 
-    print(f"✅ W&B run started: {run_name}")
 
     # Create the environment, learner, demonstrator, etc
     env = create_minigrid_env(grid_size)
@@ -56,7 +55,7 @@ def run_experiment(args):
         demonstrator_name="MiniGridDemonstrator",
         T=T,
     )
-    demo.draw(False, False, 0)
+    demo.render(False, False, 0)
     reward_demonstrator = env.compute_true_reward_for_agent(demo, None, T)
 
     wandb.log({
@@ -81,8 +80,6 @@ def run_experiment(args):
         "time_total_expectation": sum(time_expectation),
         "time_avg_per_iter_expectation": np.mean(time_expectation),
     })
-
-    print(f"✅ Finished experiment with grid={grid_size}, T={T}, run={i}")
 
     # Variance matching agent
     agent_variance = learner.TabularLearner(
@@ -114,9 +111,9 @@ def run_experiment(args):
 if __name__ == "__main__":
 
 
-    grid_sizes = [2 * i + 1 for i in range(2, 5, 2)]
+    grid_sizes = [2 * i + 1 for i in range(2, 21, 3)]
     horizons = [2 * s + 2 for s in grid_sizes]
-    runs = 1
+    runs = 5
 
     tasks = []
     for grid_size in grid_sizes:
