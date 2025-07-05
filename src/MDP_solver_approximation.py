@@ -33,6 +33,8 @@ class MDPSolverApproximation(MDPSolver):
         timesteps for embedded SAC training in the approximated SVI
     sac_buffer_size : int
         buffer size for embedded SAC training in the approximated SVI
+    sac_tau : float
+        soft update coefficient ("Polyak update", between 0 and 1)
     log_dir : str
         logging directory
     model_dir : str
@@ -45,6 +47,7 @@ class MDPSolverApproximation(MDPSolver):
         compute_variance: bool,
         sac_timesteps: int = 10000,
         sac_buffer_size: int = 100000,
+        sac_tau: float = 0.005,
         log_dir: str = None,
         model_dir: str = None,
     ):
@@ -53,6 +56,7 @@ class MDPSolverApproximation(MDPSolver):
 
         self.sac_timesteps = sac_timesteps
         self.sac_buffer_size = sac_buffer_size
+        self.sac_tau = sac_tau
 
         self.log_dir = log_dir
         self.model_dir = model_dir
@@ -113,6 +117,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         timesteps for embedded SAC training in the approximated SVI
     sac_buffer_size : int
         buffer size for embedded SAC training in the approximated SVI
+    sac_tau : float
+        soft update coefficient ("Polyak update", between 0 and 1)
     """
 
     def __init__(
@@ -122,12 +128,14 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         compute_variance: bool = False,
         sac_timesteps: int = 10000,
         sac_buffer_size: int = 100000,
+        sac_tau: float = 0.005
     ):
         super().__init__(
             T,
             compute_variance,
             sac_timesteps,
             sac_buffer_size,
+            sac_tau,
             log_dir=Path("experiments")/experiment_name/"agent_expectation",
             model_dir=Path("models")/experiment_name/"agent_expectation",
         )
@@ -151,7 +159,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.set_custom_reward_function(lambda s: values["reward"](s.flatten()))
 
-        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size)
+        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size, gamma=env.gamma, tau=self.sac_tau)
 
         callback = CallbackList(
             [
@@ -195,6 +203,8 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         timesteps for embedded SAC training in the approximated SVI
     sac_buffer_size : int
         buffer size for embedded SAC training in the approximated SVI
+    sac_tau : float
+        soft update coefficient ("Polyak update", between 0 and 1)
     """
 
     def __init__(
@@ -204,12 +214,14 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         compute_variance: bool = True,
         sac_timesteps: int = 10000,
         sac_buffer_size: int = 100000,
+        sac_tau : float = 0.005
     ):
         super().__init__(
             T,
             compute_variance,
             sac_timesteps,
             sac_buffer_size,
+            sac_tau,
             log_dir=Path("experiments")/experiment_name/"agent_variance",
             model_dir=Path("models")/experiment_name/"agent_variance",
         )
@@ -236,7 +248,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             lambda s: values["reward"](s.flatten()) + values["variance"](s.flatten())
         )
 
-        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size)
+        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size, gamma=env.gamma, tau = self.sac_tau)
 
         callback = CallbackList(
             [
