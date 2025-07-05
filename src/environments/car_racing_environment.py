@@ -37,6 +37,7 @@ class CarRacingEnvironment(Environment):
         self.n_frames = env_args["n_frames"]
         self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
+        self.gamma = env_args["gamma"]
 
         self.log_dir = Path("experiments")
 
