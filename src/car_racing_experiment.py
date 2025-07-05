@@ -7,10 +7,10 @@ import psutil
 import gc
 import wandb
 
-def create_carracing_env(lap_complete_percent:float=0.95, T:int = 1000):
+def create_carracing_env(lap_complete_percent:float=0.95, T:int = 1000, gamma:float = 0.99):
 
     config_env = {
-        "gamma": 1.0,
+        "gamma": gamma,
         "lap_complete_percent": lap_complete_percent,
         "T":T,
         "n_frames" : 4,
@@ -45,6 +45,8 @@ if __name__ == "__main__":
     n_trajectories = 100
     sac_timesteps = 7500
     sac_buffer_size = 50000
+    sac_tau = 0.05
+    sac_gamma = 0.95
     # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
     lap_percent_complete=0.95
     T = 200
@@ -68,7 +70,7 @@ if __name__ == "__main__":
     log_memory("start")
 
     # create the environment
-    env = create_carracing_env(lap_complete_percent=lap_percent_complete, T=T)
+    env = create_carracing_env(lap_complete_percent=lap_percent_complete, T=T, gamma=sac_gamma)
 
     # Learner config
     config_default_learner = create_config_learner(n_trajectories, maxiter)
