@@ -23,7 +23,7 @@ def create_carracing_env(lap_complete_percent:float=0.95, T:int = 1000):
 
 
 def create_config_learner(n_trajectories:int = 1, maxiter:int=3):
-    config_default_learner = {"tol": 0.0005, "miniter": 1, "maxiter": maxiter, "n_trajectories":n_trajectories}
+    config_default_learner = {"tol_exp": 50., "tol_var": 1250., "miniter": 1, "maxiter": maxiter, "n_trajectories":n_trajectories}
 
     return config_default_learner
 

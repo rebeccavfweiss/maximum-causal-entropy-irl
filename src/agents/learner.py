@@ -24,7 +24,8 @@ class Learner(Agent):
         feature expectation and variance terms of the demonstrator
     config_agent : dict[str: any]
         different configuration parameters for the agent including
-        tol : convergence tolerance for batch_MCE
+        tol_exp : convergence tolerance for batch_MCE
+        tol_var : convergence tolerance for batch_MCE
         maxiter : maximal number of iterations for batch_MCE
         miniter : minimal number of iterations for batch_MCE
     agent_name : str
@@ -50,7 +51,8 @@ class Learner(Agent):
         self.theta_e = np.zeros(self.env.n_features)
         self.theta_v = np.zeros((self.env.n_features, self.env.n_features))
 
-        self.tol = config_agent["tol"]
+        self.tol_exp = config_agent["tol_exp"]
+        self.tol_var = config_agent.get("tol_var", None)
         self.maxiter = config_agent["maxiter"]
         self.miniter = config_agent["miniter"]
         self.n_trajectories = config_agent.get("n_trajectories", None)
@@ -235,8 +237,8 @@ class Learner(Agent):
                 **({f"theta_v_diff_{self.agent_name}": theta_v_diff, f"grad_norm_theta_v_{self.agent_name}": torch.norm(theta_v.grad).item()} if calc_theta_v else {})
             })
 
-            if theta_e_diff < self.tol and (
-                not calc_theta_v or theta_v_diff < 5 * self.tol
+            if theta_e_diff < self.tol_exp and (
+                not calc_theta_v or theta_v_diff < self.tol_var
             ):
                 if t >= self.miniter:
                     break
@@ -265,7 +267,8 @@ class TabularLearner(Learner):
         feature expectation and variance terms of the demonstrator
     config_agent : dict[str: any]
         different configuration parameters for the agent including
-        tol : convergence tolerance for batch_MCE
+        tol_exp : convergence tolerance for batch_MCE
+        tol_var : convergence tolerance for batch_MCE
         maxiter : maximal number of iterations for batch_MCE
         miniter : minimal number of iterations for batch_MCE
     agent_name : str
@@ -322,7 +325,8 @@ class ApproximateLearner(Learner):
         feature expectation and variance terms of the demonstrator
     config_agent : dict[str: any]
         different configuration parameters for the agent including
-        tol : convergence tolerance for batch_MCE
+        tol_exp : convergence tolerance for batch_MCE
+        tol_var : convergence tolerance for batch_MCE
         maxiter : maximal number of iterations for batch_MCE
         miniter : minimal number of iterations for batch_MCE
     agent_name : str
