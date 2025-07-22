@@ -29,12 +29,16 @@ class MDPSolverApproximation(MDPSolver):
         finite horizon value
     compute_variance : bool
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    sac_config : dict[str, any]
+        dictionary containing parameters for SAC, e.g.,
+        buffer_size : int
+            buffer size for embedded SAC training in the approximated SVI
+        tau : float
+            soft update coefficient ("Polyak update", between 0 and 1)
+        train_freq: int
+            number of training steps after which the target network should be updated
     sac_timesteps : int
-        timesteps for embedded SAC training in the approximated SVI
-    sac_buffer_size : int
-        buffer size for embedded SAC training in the approximated SVI
-    sac_tau : float
-        soft update coefficient ("Polyak update", between 0 and 1)
+            timesteps for embedded SAC training in the approximated SVI
     log_dir : str
         logging directory
     model_dir : str
@@ -45,18 +49,16 @@ class MDPSolverApproximation(MDPSolver):
         self,
         T: int,
         compute_variance: bool,
-        sac_timesteps: int = 10000,
-        sac_buffer_size: int = 100000,
-        sac_tau: float = 0.005,
+        sac_config: dict[str, any],
+        sac_timesteps : int = 10000,
         log_dir: str = None,
         model_dir: str = None,
     ):
 
         super().__init__(T, compute_variance)
 
+        self.sac_config = sac_config
         self.sac_timesteps = sac_timesteps
-        self.sac_buffer_size = sac_buffer_size
-        self.sac_tau = sac_tau
 
         self.log_dir = log_dir
         self.model_dir = model_dir
@@ -109,33 +111,36 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
     ----------
     experiment_name : str
         name for the experiment that will be used in naming logging/storage directories
+    sac_config : dict[str, any]
+        dictionary containing parameters for SAC, e.g.,
+        buffer_size : int
+            buffer size for embedded SAC training in the approximated SVI
+        tau : float
+            soft update coefficient ("Polyak update", between 0 and 1)
+        train_freq: int
+            number of training steps after which the target network should be updated
+    sac_timesteps : int
+            timesteps for embedded SAC training in the approximated SVI
     T : int
         finite horizon value
     compute_variance : bool
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
-    sac_timesteps : int
-        timesteps for embedded SAC training in the approximated SVI
-    sac_buffer_size : int
-        buffer size for embedded SAC training in the approximated SVI
-    sac_tau : float
-        soft update coefficient ("Polyak update", between 0 and 1)
     """
 
     def __init__(
         self,
         experiment_name: str,
+        sac_config : dict[str, any],
+        sac_timesteps : int =10000,
         T: int = 45,
         compute_variance: bool = False,
-        sac_timesteps: int = 10000,
-        sac_buffer_size: int = 100000,
-        sac_tau: float = 0.005
+        
     ):
         super().__init__(
             T,
             compute_variance,
+            sac_config,
             sac_timesteps,
-            sac_buffer_size,
-            sac_tau,
             log_dir=Path("experiments")/experiment_name/"agent_expectation",
             model_dir=Path("models")/experiment_name/"agent_expectation",
         )
@@ -159,7 +164,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.set_custom_reward_function(lambda s: values["reward"](s.flatten()))
 
-        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size, gamma=env.gamma, tau=self.sac_tau)
+        model = SAC("CnnPolicy", env.env, verbose=0, **self.sac_config)
 
         callback = CallbackList(
             [
@@ -195,33 +200,36 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
     ----------
     experiment_name : str
         name for the experiment that will be used in naming logging/storage directories
+    sac_config : dict[str, any]
+        dictionary containing parameters for SAC, e.g.,
+        buffer_size : int
+            buffer size for embedded SAC training in the approximated SVI
+        tau : float
+            soft update coefficient ("Polyak update", between 0 and 1)
+        train_freq: int
+            number of training steps after which the target network should be updated
+    sac_timesteps : int
+            timesteps for embedded SAC training in the approximated SVI
     T : int
         finite horizon value
     compute_variance : bool
             whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
-    sac_timesteps : int
-        timesteps for embedded SAC training in the approximated SVI
-    sac_buffer_size : int
-        buffer size for embedded SAC training in the approximated SVI
-    sac_tau : float
-        soft update coefficient ("Polyak update", between 0 and 1)
     """
 
     def __init__(
         self,
         experiment_name: str,
+        sac_config: dict[str,any],
+        sac_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = True,
-        sac_timesteps: int = 10000,
-        sac_buffer_size: int = 100000,
-        sac_tau : float = 0.005
+
     ):
         super().__init__(
             T,
             compute_variance,
+            sac_config,
             sac_timesteps,
-            sac_buffer_size,
-            sac_tau,
             log_dir=Path("experiments")/experiment_name/"agent_variance",
             model_dir=Path("models")/experiment_name/"agent_variance",
         )
@@ -248,7 +256,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             lambda s: values["reward"](s.flatten()) + values["variance"](s.flatten())
         )
 
-        model = SAC("CnnPolicy", env.env, verbose=0, buffer_size=self.sac_buffer_size, gamma=env.gamma, tau = self.sac_tau)
+        model = SAC("CnnPolicy", env.env, verbose=0, **self.sac_config)
 
         callback = CallbackList(
             [
