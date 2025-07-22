@@ -14,6 +14,7 @@ import os
 import numpy as np
 import utils
 from pathlib import Path
+import gym
 
 
 class CarRacingEnvironment(Environment):
@@ -66,6 +67,7 @@ class CarRacingEnvironment(Environment):
             wrapper_kwargs={'width': self.frame_width, 'height': self.frame_height},
             env_kwargs=env_kwargs
         )
+        env = VecNormalizeObs(env, NormalizeObs)
 
         return env
 
@@ -261,3 +263,30 @@ class VecCustomRewardWrapper(VecEnvWrapper):
             for i in range(len(rewards))
         ])
         return next_obs, custom_rewards, dones, info
+    
+class NormalizeObs(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        obs_shape = self.observation_space.shape
+        self.observation_space = gym.spaces.Box(
+            low=0.0, high=1.0, shape=obs_shape, dtype=np.float32
+        )
+
+    def observation(self, obs):
+        return obs.astype(np.float32) / 255.0
+    
+class VecNormalizeObs(VecEnvWrapper):
+    def __init__(self, venv, obs_wrapper_cls):
+        self.obs_wrapper = obs_wrapper_cls(venv.envs[0])
+        super().__init__(venv)
+
+    def reset(self):
+        obs = self.venv.reset()
+        return obs.astype(np.float32) / 255.0
+
+    def step_async(self, actions):
+        self.venv.step_async(actions)
+
+    def step_wait(self):
+        obs, rewards, dones, infos = self.venv.step_wait()
+        return obs.astype(np.float32) / 255.0, rewards, dones, infos
