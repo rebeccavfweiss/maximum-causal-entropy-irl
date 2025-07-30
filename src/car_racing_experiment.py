@@ -14,7 +14,10 @@ from scipy.sparse import kron, eye
 
 
 def create_carracing_env(
-    lap_complete_percent: float = 0.95, T: int = 1000, gamma: float = 0.99
+    lap_complete_percent: float = 0.95,
+    T: int = 1000,
+    gamma: float = 0.99,
+    continuous_actions: bool = True,
 ):
 
     config_env = {
@@ -24,6 +27,7 @@ def create_carracing_env(
         "n_frames": 4,
         "width": 84,
         "height": 84,
+        "continuous_actions": continuous_actions,
     }
 
     env = CarRacingEnvironment(config_env)
@@ -109,12 +113,13 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    experiment_name = "car_racing"
+    continuous_actions = True
+    experiment_name = "car_racing" + ("_continuous" if continuous_actions else "_discrete")
 
     maxiter = 20
-    n_trajectories = 30
-    sac_timesteps = 10000
-    sac_config = dict(buffer_size=50000, tau=0.005, gamma=1.0)
+    n_trajectories = 10
+    training_timesteps = 10000
+    policy_config = dict(buffer_size=50000, tau=0.005, gamma=1.0, train_freq=3)
     # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
     lap_percent_complete = 0.95
     T = 200
@@ -127,17 +132,22 @@ if __name__ == "__main__":
 
     wandb.init(
         project="mceirl-car-racing",
-        name=f"{experiment_name}-iter{maxiter}-sac_iter{sac_timesteps}-T{T}-traj{n_trajectories}-adh{weight_track_adherence}-smooth{weight_spatial_smoothness}-tempcons{weight_temporal_consistency}",
+        name=f"{experiment_name}-iter{maxiter}-sac_iter{training_timesteps}-T{T}-traj{n_trajectories}-adh{weight_track_adherence}-smooth{weight_spatial_smoothness}-tempcons{weight_temporal_consistency}",
         config={
             "maxiter": maxiter,
             "n_trajectories": n_trajectories,
-            "sac_timesteps": sac_timesteps,
-            "sac_buffer_size": sac_config["buffer_size"],
+            "sac_dqn_timesteps": training_timesteps,
+            "sac_dqn_buffer_size": policy_config["buffer_size"],
             "lap_percent_complete": lap_percent_complete,
             "T": T,
             "track_adherence": weight_track_adherence,
             "spatial_smoothness": weight_spatial_smoothness,
             "temporal_consistency": weight_temporal_consistency,
+            "actions_space": (
+                "continous action space"
+                if continuous_actions
+                else "discrete action space"
+            ),
         },
     )
 
@@ -145,7 +155,10 @@ if __name__ == "__main__":
 
     # create the environment
     env = create_carracing_env(
-        lap_complete_percent=lap_percent_complete, T=T, gamma=sac_config["gamma"]
+        lap_complete_percent=lap_percent_complete,
+        T=T,
+        gamma=policy_config["gamma"],
+        continuous_actions=continuous_actions,
     )
 
     heuristic_theta_e = compute_heuristic_theta_e(env.frame_width, env.frame_height)
@@ -165,14 +178,16 @@ if __name__ == "__main__":
     demo = demonstrator.CarRacingDemonstrator(
         env,
         demonstrator_name="CarRacingDemonstrator",
+        continuous_actions=continuous_actions,
         T=T,
         n_trajectories=n_trajectories,
         solver=MDPSolverApproximationExpectation(
             experiment_name=experiment_name,
+            continuous_actions=continuous_actions,
             T=T,
             compute_variance=True,
-            sac_config=sac_config,
-            sac_timesteps=sac_timesteps,
+            policy_config=policy_config,
+            training_timesteps=training_timesteps,
         ),
     )
 
@@ -202,10 +217,11 @@ if __name__ == "__main__":
         agent_name="AgentExpectation",
         solver=MDPSolverApproximationExpectation(
             experiment_name=experiment_name,
+            continuous_actions=continuous_actions,
             T=T,
             compute_variance=False,
-            sac_config=sac_config,
-            sac_timesteps=sac_timesteps,
+            policy_config=policy_config,
+            training_timesteps=training_timesteps,
         ),
         learning_rate=learning_rate,
         heuristic_theta_e=heuristic_theta_e,
@@ -245,10 +261,11 @@ if __name__ == "__main__":
         agent_name="AgentVariance",
         solver=MDPSolverApproximationVariance(
             experiment_name=experiment_name,
+            continuous_actions=continuous_actions,
             T=T,
             compute_variance=True,
-            sac_config=sac_config,
-            sac_timesteps=sac_timesteps,
+            policy_config=policy_config,
+            training_timesteps=training_timesteps,
         ),
         learning_rate=learning_rate,
         heuristic_theta_e=heuristic_theta_e,

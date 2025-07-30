@@ -5,7 +5,7 @@ from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import CallbackList
 from utils import TimedEvalCallback
 import os
@@ -291,6 +291,8 @@ class CarRacingDemonstrator(Demonstrator):
         the environment representing the setting of the problem
     demonstrator_name : str
         name of the demonstrator
+    continuous_actions : bool
+        whether the environment has a continous or action space
     T : int
         finite horizon value for the MDP solver
     gamma : float
@@ -305,17 +307,22 @@ class CarRacingDemonstrator(Demonstrator):
         self,
         env: MinigridEnvironment,
         demonstrator_name: str,
+        continuous_actions : bool = True,
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
-        time_steps: int = 1_250_000,
+        time_steps: int = 1_000_000,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
-        self.model_path = Path("models") / "car_racing" /"ppo_carracing.zip"
+        self.continuous_actions = continuous_actions
+        if continuous_actions:
+            self.model_path = Path("models") / "car_racing" /"ppo_carracing.zip"
+        else: 
+            self.model_path = Path("models")/"car_racing" /"dqn_carracing.zip"  
+        
         self.log_dir = Path("experiments") /"car_racing"/"demonstrator"
-
-
+        #self.env.set_max_episode_steps(100)
         self.policy = self.__train_demonstrator(time_steps)
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
@@ -323,17 +330,26 @@ class CarRacingDemonstrator(Demonstrator):
     def __train_demonstrator(self, time_steps: int):
         if os.path.exists(self.model_path):
             wandb.log({"use_pretrained_model": True})
-            model = PPO.load(self.model_path, env=self.env.env)
-
+            if self.continuous_actions:
+                model = PPO.load(self.model_path, env=self.env.env)
+            else:
+                model = DQN.load(self.model_path, env=self.env.env)
         else:
             wandb.log({"use_pretrained_model": False})
-            model = PPO("CnnPolicy", self.env.env, verbose=0)
+
+            # train new demonstrator on lager horizon
+            self.env.set_max_episode_steps(1000)
+
+            if self.continuous_actions:
+                model = PPO("CnnPolicy", self.env.env, verbose=0)
+            else: 
+                model = DQN("CnnPolicy", self.env.env, verbose=0)
 
             callback = CallbackList([
                         TimedEvalCallback(self.env.env_val,
                              best_model_save_path=self.model_path,
                              log_path=self.log_dir,
-                             eval_freq=25_000,
+                             eval_freq=10_000,
                              render=False,
                              n_eval_episodes=10),
                         WandbCallback(model_save_path=self.model_path, verbose=1)])
@@ -345,6 +361,12 @@ class CarRacingDemonstrator(Demonstrator):
             wandb.log_artifact(artifact)
 
             #actually use best model and not last
-            model = PPO.load(self.model_path)
+            if self.continuous_actions:
+                model = PPO.load(self.model_path)
+            else:
+                model = DQN.load(self.model_path)
+
+            #reset maximal episode length back to defined T
+            self.env.set_max_episode_steps(self.T)
 
         return ModelPolicy(model)

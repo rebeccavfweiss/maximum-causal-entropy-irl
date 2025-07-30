@@ -39,6 +39,7 @@ class CarRacingEnvironment(Environment):
         self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
         self.gamma = env_args["gamma"]
+        self.continous_actions = env_args["continuous_actions"]
 
         self.log_dir = Path("experiments")
 
@@ -55,7 +56,7 @@ class CarRacingEnvironment(Environment):
     def make_env(self):
         env_kwargs = {
             "render_mode": "rgb_array",
-            "continuous": True,
+            "continuous": self.continous_actions,
             "lap_complete_percent": self.lap_complete_percent,
             "domain_randomize": False,
             "max_episode_steps": self.T
@@ -196,6 +197,15 @@ class CarRacingEnvironment(Environment):
     def reset_reward_function(self):
         """Reset to the original vec_env with default rewards."""
         self.env = self._base_env
+
+    def set_max_episode_steps(self, new_steps: int):
+        for env in self.env.envs:
+            base_env = env
+            while isinstance(base_env, gym.Wrapper):
+                if isinstance(base_env, gym.wrappers.TimeLimit):
+                    base_env._max_episode_steps = new_steps
+                    break
+                base_env = base_env.env
 
     def evaluate_policy_custom(
         self,
