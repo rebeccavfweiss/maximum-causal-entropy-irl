@@ -353,12 +353,12 @@ class ApproximateLearner(Learner):
         super().__init__(env, mu_demonstrator, config_agent, agent_name, solver, learning_rate)
 
         if heuristic_theta_e is not None:
-            assert heuristic_theta_e.shape == self.env.n_features, "heuristic for theta_e has wrong dimension(s)"
+            assert heuristic_theta_e.shape[0] == self.env.n_features, f"heuristic for theta_e has wrong dimension(s), expected {self.env.n_features} got {heuristic_theta_e.shape}"
 
             self.theta_e = heuristic_theta_e
         
         if heuristic_theta_v is not None:
-            assert heuristic_theta_v.shape == (self.env.n_features, self.env.n_features)
+            assert heuristic_theta_v.shape == (self.env.n_features, self.env.n_features), f"heuristic for theta_v has wrong dimension(s), expexted {(self.env.n_features, self.env.n_features)} got {heuristic_theta_v.shape}"
 
             self.theta_v = heuristic_theta_v
 
