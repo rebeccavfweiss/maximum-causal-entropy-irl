@@ -39,7 +39,7 @@ class CarRacingEnvironment(Environment):
         self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
         self.gamma = env_args["gamma"]
-        self.continous_actions = env_args["continuous_actions"]
+        self.continuous_actions = env_args["continuous_actions"]
 
         self.log_dir = Path("experiments")
 
@@ -56,7 +56,7 @@ class CarRacingEnvironment(Environment):
     def make_env(self):
         env_kwargs = {
             "render_mode": "rgb_array",
-            "continuous": self.continous_actions,
+            "continuous": self.continuous_actions,
             "lap_complete_percent": self.lap_complete_percent,
             "domain_randomize": False,
             "max_episode_steps": self.T
@@ -68,7 +68,7 @@ class CarRacingEnvironment(Environment):
             wrapper_kwargs={'width': self.frame_width, 'height': self.frame_height},
             env_kwargs=env_kwargs
         )
-        env = VecNormalizeObs(env, NormalizeObs)
+        #env = VecNormalizeObs(env, NormalizeObs)
 
         return env
 
@@ -139,12 +139,14 @@ class CarRacingEnvironment(Environment):
         path : Path
             path to the file in which the video is stored
         """
+
+        name_prefix = "car_racing" + ("_continuous" if self.continuous_actions else "_discrete")
         env = VecVideoRecorder(
             self.env,
             video_folder=os.path.dirname(f"recordings\car_racing\{strname}.mp4") or ".",
             record_video_trigger=lambda step: True,  # record first episode
             video_length=T,
-            name_prefix=f"car_racing_{strname}",
+            name_prefix=f"{name_prefix}_{strname}",
         )
 
         obs = env.reset()
@@ -163,7 +165,7 @@ class CarRacingEnvironment(Environment):
 
         env.close()
 
-        return Path("recordings")/ "car_racing"/ f"car_racing_{strname}-step-0-to-step-{T}.mp4"
+        return Path("recordings")/ "car_racing"/ f"{name_prefix}_{strname}-step-0-to-step-{T}.mp4"
 
     def compute_true_reward_for_agent(
         self, agent, n_trajectories: int = None, T: int = None
