@@ -68,7 +68,7 @@ def compute_heuristic_theta_e(width, height):
     center_mask = np.clip(center_mask, 0, 0.9)
 
     # Normalize
-    # center_mask /= center_mask.sum()
+    center_mask /= 255. #center_mask.sum()
 
     return -np.tile(center_mask.flatten(), 4)
 
@@ -113,22 +113,22 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    continuous_actions = True
+    continuous_actions = False
     experiment_name = "car_racing" + ("_continuous" if continuous_actions else "_discrete")
 
-    maxiter = 20
-    n_trajectories = 10
-    training_timesteps = 10000
-    policy_config = dict(buffer_size=50000, tau=0.005, gamma=1.0, train_freq=3)
+    maxiter = 2
+    n_trajectories = 100
+    training_timesteps = 500000
+    policy_config = dict(buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5)
     # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
-    lap_percent_complete = 0.95
-    T = 200
+    lap_percent_complete = 0.33
+    T = 300
 
     weight_track_adherence = 1.0  # track adherence
     weight_spatial_smoothness = 0.1  # spatial smoothness
     weight_temporal_consistency = 0.05  # temporal consistency (small)
 
-    learning_rate = lambda step: max(0.95 ** (step + 1), 0.01)
+    learning_rate = lambda step: max(0.975 ** (step + 1), 0.01)
 
     wandb.init(
         project="mceirl-car-racing",
@@ -203,7 +203,11 @@ if __name__ == "__main__":
         }
     )
 
-    demo.render(show, store, 0)
+    path_to_file = demo.render(show, store, 0)
+
+    if path_to_file is not None:
+        #log a video to see how the demonstrator is performing
+        wandb.log({f"eval/video_{demo.agent_name}": wandb.Video(path_to_file, fps=4, format="mp4")})
 
     # clean up
     del demo.policy
