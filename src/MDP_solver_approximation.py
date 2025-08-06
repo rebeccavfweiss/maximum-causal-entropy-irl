@@ -152,6 +152,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
             log_dir=Path("experiments")/experiment_name/"agent_expectation",
             model_dir=Path("models")/experiment_name/"agent_expectation",
         )
+        self.experiment_name = experiment_name
 
     def soft_value_iteration(self, env: Environment, values: dict[str:any]) -> Policy:
         """
@@ -249,6 +250,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             log_dir=Path("experiments")/experiment_name/"agent_variance",
             model_dir=Path("models")/experiment_name/"agent_variance",
         )
+        self.experiment_name = experiment_name
 
     def soft_value_iteration(self, env: Environment, values: dict[str:any]) -> Policy:
         """
