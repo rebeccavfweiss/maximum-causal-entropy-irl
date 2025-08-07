@@ -123,7 +123,7 @@ if __name__ == "__main__":
             for i in range(runs):
                 tasks.append((grid_size, T, i))
 
-    with Pool() as pool:
+    with Pool(processes=10) as pool:
         results = pool.map(run_experiment, tasks)
 
     results_df = pd.DataFrame(
