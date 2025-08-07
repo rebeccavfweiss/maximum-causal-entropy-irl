@@ -4,6 +4,7 @@ from MDP_solver_approximation import MDPSolverApproximation, MDPSolverApproximat
 import numpy as np
 import wandb
 from environments.environment import Environment, GridEnvironment
+from environments.car_racing_environment import CarRacingEnvironment
 from policy import Policy
 from agents.agent import Agent
 from time import time
@@ -188,7 +189,7 @@ class Learner(Agent):
             # Recompute agent feature expectations
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
-            if t%100 == 0:
+            if isinstance(self.env, CarRacingEnvironment) and t%100 == 0:
                 path_to_file = self.render(False, True)
                 if path_to_file is not None:
                     #log a video to see how the current policy is doing
