@@ -9,8 +9,6 @@ import numpy as np
 import psutil
 import gc
 import wandb
-from utils import laplacian_2d
-from scipy.sparse import kron, eye
 
 
 def create_carracing_env(
@@ -56,7 +54,7 @@ def log_memory(stage=""):
     )
 
 
-def compute_heuristic_theta_e(width, height):
+def compute_heuristics(width, height):
     # Create a mask that favors the center
     y = np.linspace(-1, 1, width)
     x = np.linspace(-1, 1, height)
@@ -70,43 +68,11 @@ def compute_heuristic_theta_e(width, height):
     # Normalize
     center_mask /= 255. #center_mask.sum()
 
-    return -np.tile(center_mask.flatten(), 4)
 
+    h_theta_e = -np.tile(center_mask.flatten(), 4)
+    h_theta_v = np.diag(h_theta_e)
 
-def temporal_diff_matrix(num_frames, frame_size):
-    # block tridiagonal matrix with I, -I on off-diagonals
-    I = np.eye(frame_size)
-    D = np.zeros((num_frames * frame_size, num_frames * frame_size))
-    for i in range(num_frames - 1):
-        D[
-            i * frame_size : (i + 1) * frame_size,
-            i * frame_size : (i + 1) * frame_size,
-        ] += I
-        D[
-            (i + 1) * frame_size : (i + 2) * frame_size,
-            (i + 1) * frame_size : (i + 2) * frame_size,
-        ] += I
-        D[
-            i * frame_size : (i + 1) * frame_size,
-            (i + 1) * frame_size : (i + 2) * frame_size,
-        ] -= I
-        D[
-            (i + 1) * frame_size : (i + 2) * frame_size,
-            i * frame_size : (i + 1) * frame_size,
-        ] -= I
-    return D
-
-
-def compute_heuristic_theta_v(h_theta_e, alpha, beta, gamma):
-    Q_track = np.diag(h_theta_e)
-
-    L = laplacian_2d(env.frame_height, env.frame_width, env.n_frames)
-    I4 = eye(4)
-    Q_spatial = kron(I4, L)  # shape (4*84*84, 4*84*84)
-
-    D = temporal_diff_matrix(env.n_frames, env.frame_height * env.frame_width)
-
-    return alpha * Q_track + beta * Q_spatial + gamma * D
+    return h_theta_e, h_theta_v
 
 
 if __name__ == "__main__":
@@ -116,23 +82,19 @@ if __name__ == "__main__":
     continuous_actions = False
     experiment_name = "car_racing" + ("_continuous" if continuous_actions else "_discrete")
 
-    maxiter = 2
+    maxiter = 100
     n_trajectories = 100
-    training_timesteps = 500000
+    training_timesteps = 300000
     policy_config = dict(buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5)
     # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
     lap_percent_complete = 0.33
     T = 300
 
-    weight_track_adherence = 1.0  # track adherence
-    weight_spatial_smoothness = 0.1  # spatial smoothness
-    weight_temporal_consistency = 0.05  # temporal consistency (small)
-
     learning_rate = lambda step: max(0.975 ** (step + 1), 0.01)
 
     wandb.init(
         project="mceirl-car-racing",
-        name=f"{experiment_name}-iter{maxiter}-sac_iter{training_timesteps}-T{T}-traj{n_trajectories}-adh{weight_track_adherence}-smooth{weight_spatial_smoothness}-tempcons{weight_temporal_consistency}",
+        name=f"{experiment_name}-iter{maxiter}-sac_iter{training_timesteps}-T{T}-traj{n_trajectories}",
         config={
             "maxiter": maxiter,
             "n_trajectories": n_trajectories,
@@ -140,9 +102,6 @@ if __name__ == "__main__":
             "sac_dqn_buffer_size": policy_config["buffer_size"],
             "lap_percent_complete": lap_percent_complete,
             "T": T,
-            "track_adherence": weight_track_adherence,
-            "spatial_smoothness": weight_spatial_smoothness,
-            "temporal_consistency": weight_temporal_consistency,
             "actions_space": (
                 "continous action space"
                 if continuous_actions
@@ -161,13 +120,7 @@ if __name__ == "__main__":
         continuous_actions=continuous_actions,
     )
 
-    heuristic_theta_e = compute_heuristic_theta_e(env.frame_width, env.frame_height)
-    heuristic_theta_v = compute_heuristic_theta_v(
-        heuristic_theta_e,
-        weight_track_adherence,
-        weight_spatial_smoothness,
-        weight_temporal_consistency,
-    )
+    heuristic_theta_e, heuristic_theta_v = compute_heuristics(env.frame_width, env.frame_height)
 
     # Learner config
     config_default_learner = create_config_learner(n_trajectories, maxiter)
