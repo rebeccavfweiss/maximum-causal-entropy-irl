@@ -9,7 +9,7 @@ np.set_printoptions(precision=4)
 
 class Environment(ABC):
     """
-    Base class to generalize access to SimpleEnvironment and Gymnasium environments
+    Base class to generalize access to different types of environments
 
     Parameters
     ----------
@@ -20,6 +20,63 @@ class Environment(ABC):
     def __init__(self, env_args: dict):
 
         self.gamma = env_args["gamma"]
+        self.terminal_states = None
+        self.reward = None
+
+    @abstractmethod
+    def reset(self):
+        pass
+
+    @abstractmethod
+    def step(self, action):
+        pass
+
+    @abstractmethod
+    def render(self, policy: Policy, T: int = 20, store: bool = False, **kwargs):
+        pass
+
+    def compute_true_reward_for_agent(
+        self, agent, n_trajectories: int = 1, T: int = None
+    ) -> float:
+        """
+        Compute the true reward in the environment either with the given policy or with trajectories
+
+        Parameters
+        ----------
+        agent
+            agent/demonstrator that should be evaluated in the environment
+        n_trajectories : int
+            number of trajectories to use
+
+        Returns
+        -------
+        reward : float
+            true reward for the given agent
+        """
+
+        # compute reward based on trajectories
+        rewards = []
+        for i in range(n_trajectories):
+            trajectory = agent.solver.generate_episode(self, agent.policy, T)
+            rewards.append(
+                sum([trajectory[j][3] * self.gamma**j for j in range(len(trajectory))])
+            )
+        return np.mean(rewards)
+
+
+class GridEnvironment(Environment):
+    """
+    Base class to generalize access to SimpleEnvironment and Gymnasium environments
+
+    Parameters
+    ----------
+    env_args: dict[Any]
+        environment definition parameters depending on the specific environment used
+    """
+
+    def __init__(self, env_args: dict):
+
+        super().__init__(env_args)
         self.theta_reward = env_args["theta"]
 
         # true reward per state
@@ -56,16 +113,16 @@ class Environment(ABC):
         ]
 
         return np.array(variance)
-    
-    @abstractmethod
-    def _compute_state_feature_matrix(self):
-        pass
 
     def get_state_feature_matrix(self) -> np.ndarray:
         """
         Getter function for (state) feature matrix
         """
         return self.feature_matrix.copy()
+
+    @abstractmethod
+    def _compute_state_feature_matrix(self):
+        pass
 
     @abstractmethod
     def _compute_transition_matrix(self):
@@ -89,19 +146,9 @@ class Environment(ABC):
 
         return T_sparse_list
 
-    @abstractmethod
-    def reset(self):
-        pass
-
-    @abstractmethod
-    def step(self, action):
-        pass
-
-    @abstractmethod
-    def render(self, policy:Policy, T: int = 20, store:bool=False,**kwargs):
-        pass
-
-    def compute_true_reward_for_agent(self, agent, n_trajectories:int=None, T:int=None) -> float:
+    def compute_true_reward_for_agent(
+        self, agent, n_trajectories: int = None, T: int = None
+    ) -> float:
         """
         Compute the true reward in the environment either with the given policy or with trajectories
 
@@ -118,24 +165,13 @@ class Environment(ABC):
             true reward for the given policy
         """
 
-        if n_trajectories is None:
-            
-            a = agent.solver.compute_feature_SVF_bellmann(
-                            self, agent.policy.pi
-                        )[0]
+        if n_trajectories is None or n_trajectories == 0:
+            # use policy and static rewards directly
 
             return np.dot(
-                        self.reward,
-                        agent.solver.compute_feature_SVF_bellmann(
-                            self, agent.policy.pi
-                        )[0],
-                    )
-        
+                self.reward, np.sum(agent.solver.compute_SV(self, agent.policy), axis=0)
+            )
+
         else:
             # compute reward based on trajectories
-            rewards = []
-            for i in range(n_trajectories):
-                trajectory = agent.solver.generate_episode(self, agent.policy, T)[0]
-
-                rewards.append(sum([trajectory[j][3]*self.gamma**j for j in range(len(trajectory))]))
-            return np.mean(rewards)
+            return super().compute_true_reward_for_agent(agent, n_trajectories, T)

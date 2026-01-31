@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 from policy import Policy
 import copy
 import os
-from environments.environment import Environment
+from environments.environment import GridEnvironment
 
-class SimpleEnvironment(Environment):
+class SimpleEnvironment(GridEnvironment):
     """
     implements a grid world with different objects that an agent will have to collect
 
@@ -38,7 +38,7 @@ class SimpleEnvironment(Environment):
 
         self.state_object_array = self.__place_objects_on_the_grid()
 
-        self.T_matrix, self.terminat_states = self._compute_transition_matrix()
+        self.T_matrix, self.terminal_states = self._compute_transition_matrix()
         self.T_sparse_list = self._compute_transition_sparse_list()
         self.feature_matrix = self._compute_state_feature_matrix()
 
