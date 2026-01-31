@@ -1,6 +1,6 @@
 import agents.learner as learner
 import agents.demonstrator as demonstrator
-from environments.minigrid_environment import CrossingMiniGridEnvironment
+from environments.discrete_minigrid_environment import CrossingMiniGridEnvironment
 import solvers.MDP_solver_exact as MDPSolver
 import numpy as np
 import pandas as pd
