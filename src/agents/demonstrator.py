@@ -1,5 +1,5 @@
-import MDP_solver
-from MDP_solver_exact import MDPSolverExactExpectation
+import solvers.MDP_solver as MDP_solver
+from solvers.MDP_solver_exact import MDPSolverExactExpectation
 from environments.environment import Environment
 from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment

@@ -1,7 +1,7 @@
 import agents.learner as learner
 import agents.demonstrator as demonstrator
 from environments.minigrid_environment import CrossingMiniGridEnvironment
-import MDP_solver_exact as MDPSolver
+import solvers.MDP_solver_exact as MDPSolver
 import numpy as np
 import pandas as pd
 from random import randint
@@ -9,6 +9,7 @@ import wandb
 from multiprocessing import Pool
 from itertools import product
 from pathlib import Path
+
 
 def create_minigrid_env(grid_size: int = 9):
 
@@ -26,9 +27,15 @@ def create_minigrid_env(grid_size: int = 9):
 
 
 def create_config_learner():
-    config_default_learner = {"tol_exp": 0.005,"tol_var":0.125, "miniter": 1, "maxiter": 5000}
+    config_default_learner = {
+        "tol_exp": 0.005,
+        "tol_var": 0.125,
+        "miniter": 1,
+        "maxiter": 5000,
+    }
 
     return config_default_learner
+
 
 def run_experiment(args):
     grid_size, T, i = args
@@ -42,9 +49,8 @@ def run_experiment(args):
             "horizon": T,
             "run": i,
         },
-        reinit="finish_previous"
+        reinit="finish_previous",
     )
-
 
     # Create the environment, learner, demonstrator, etc
     env = create_minigrid_env(grid_size)
@@ -58,11 +64,13 @@ def run_experiment(args):
     demo.render(False, False, 0)
     reward_demonstrator = env.compute_true_reward_for_agent(demo, None, T)
 
-    wandb.log({
-        "demonstrator_expected_value": demo.mu_demonstrator[0],
-        "demonstrator_variance": demo.mu_demonstrator[1],
-        "demonstrator_reward": reward_demonstrator,
-    })
+    wandb.log(
+        {
+            "demonstrator_expected_value": demo.mu_demonstrator[0],
+            "demonstrator_variance": demo.mu_demonstrator[1],
+            "demonstrator_reward": reward_demonstrator,
+        }
+    )
 
     # Expectation matching agent
     agent_expectation = learner.TabularLearner(
@@ -74,12 +82,14 @@ def run_experiment(args):
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
     reward_expectation = env.compute_true_reward_for_agent(agent_expectation, None, T)
-    wandb.log({
-        "reward_expectation": reward_expectation,
-        "iterations_expectation": iter_expectation,
-        "time_total_expectation": sum(time_expectation),
-        "time_avg_per_iter_expectation": np.mean(time_expectation),
-    })
+    wandb.log(
+        {
+            "reward_expectation": reward_expectation,
+            "iterations_expectation": iter_expectation,
+            "time_total_expectation": sum(time_expectation),
+            "time_avg_per_iter_expectation": np.mean(time_expectation),
+        }
+    )
 
     # Variance matching agent
     agent_variance = learner.TabularLearner(
@@ -91,25 +101,36 @@ def run_experiment(args):
     )
     iter_variance, time_variance = agent_variance.batch_MCE()
     reward_variance = env.compute_true_reward_for_agent(agent_variance, None, T)
-    wandb.log({
-        "reward_variance": reward_variance,
-        "iterations_variance": iter_variance,
-        "time_total_variance": sum(time_variance),
-        "time_avg_per_iter_variance": np.mean(time_variance),
-    })
+    wandb.log(
+        {
+            "reward_variance": reward_variance,
+            "iterations_variance": iter_variance,
+            "time_total_variance": sum(time_variance),
+            "time_avg_per_iter_variance": np.mean(time_variance),
+        }
+    )
 
     wandb.finish()
 
     return [
-        T, grid_size, i,
-        reward_demonstrator, reward_expectation, iter_expectation,
-        sum(time_expectation), np.mean(time_expectation), np.std(time_expectation),
-        reward_variance, iter_variance, sum(time_variance),
-        np.mean(time_variance), np.std(time_variance)
+        T,
+        grid_size,
+        i,
+        reward_demonstrator,
+        reward_expectation,
+        iter_expectation,
+        sum(time_expectation),
+        np.mean(time_expectation),
+        np.std(time_expectation),
+        reward_variance,
+        iter_variance,
+        sum(time_variance),
+        np.mean(time_variance),
+        np.std(time_variance),
     ]
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
 
     grid_sizes = [2 * i + 1 for i in range(2, 21, 3)]
     horizons = [2 * s + 2 for s in grid_sizes]
@@ -129,12 +150,20 @@ if __name__ == "__main__":
     results_df = pd.DataFrame(
         results,
         columns=[
-            "T","grid","run",
-            "reward_demo","reward_exp","iter_exp",
-            "time_exp","mean_time_exp","std_time_exp",
-            "reward_var","iter_var","time_var",
-            "mean_time_var","std_time_var"
-        ]
+            "T",
+            "grid",
+            "run",
+            "reward_demo",
+            "reward_exp",
+            "iter_exp",
+            "time_exp",
+            "mean_time_exp",
+            "std_time_exp",
+            "reward_var",
+            "iter_var",
+            "time_var",
+            "mean_time_var",
+            "std_time_var",
+        ],
     )
-    results_df.to_csv(Path("experiments") / "minigrid"/ "results_parallel.csv")
-
+    results_df.to_csv(Path("experiments") / "minigrid" / "results_parallel.csv")

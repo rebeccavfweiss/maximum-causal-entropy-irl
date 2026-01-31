@@ -1,7 +1,7 @@
 import agents.learner as learner
 import agents.demonstrator as demonstrator
 from environments.car_racing_environment import CarRacingEnvironment
-from MDP_solver_approximation import (
+from solvers.MDP_solver_approximation import (
     MDPSolverApproximationExpectation,
     MDPSolverApproximationVariance,
 )
@@ -32,8 +32,14 @@ def create_carracing_env(
     return env
 
 
-def create_config_learner(n_trajectories:int = 1, maxiter:int=3):
-    config_default_learner = {"tol_exp": 50., "tol_var": 1250., "miniter": 1, "maxiter": maxiter, "n_trajectories":n_trajectories}
+def create_config_learner(n_trajectories: int = 1, maxiter: int = 3):
+    config_default_learner = {
+        "tol_exp": 50.0,
+        "tol_var": 1250.0,
+        "miniter": 1,
+        "maxiter": maxiter,
+        "n_trajectories": n_trajectories,
+    }
 
     return config_default_learner
 
@@ -47,6 +53,7 @@ def log_memory(stage=""):
             f"memory_total_mb_{stage}": mem.total / (1024**2),
         }
     )
+
 
 def temporal_diff_matrix(num_frames: int, frame_size: int):
     """
@@ -72,10 +79,10 @@ def temporal_diff_matrix(num_frames: int, frame_size: int):
 
         # Expand (f_i - f_{i-1})^T (f_i - f_{i-1})
         # = f_i^T f_i + f_{i-1}^T f_{i-1} - 2 f_i^T f_{i-1}
-        D[a:a+frame_size, a:a+frame_size] += I
-        D[b:b+frame_size, b:b+frame_size] += I
-        D[a:a+frame_size, b:b+frame_size] -= I
-        D[b:b+frame_size, a:a+frame_size] -= I
+        D[a : a + frame_size, a : a + frame_size] += I
+        D[b : b + frame_size, b : b + frame_size] += I
+        D[a : a + frame_size, b : b + frame_size] -= I
+        D[b : b + frame_size, a : a + frame_size] -= I
 
     return D
 
@@ -92,12 +99,14 @@ def compute_heuristics(width, height, weight_forward, weight_speed_limitation):
     center_mask = np.clip(center_mask, 0, 0.9)
 
     # Normalize
-    center_mask /= 255. #center_mask.sum()
+    center_mask /= 255.0  # center_mask.sum()
 
-    D = temporal_diff_matrix(4, width*height)
+    D = temporal_diff_matrix(4, width * height)
 
     h_theta_e = -np.tile(center_mask.flatten(), 4)
-    h_theta_v = np.diag(h_theta_e) + weight_forward * D - weight_speed_limitation * D.dot(D) 
+    h_theta_v = (
+        np.diag(h_theta_e) + weight_forward * D - weight_speed_limitation * D.dot(D)
+    )
 
     return h_theta_e, h_theta_v
 
@@ -107,12 +116,16 @@ if __name__ == "__main__":
     show = False
     store = True
     continuous_actions = False
-    experiment_name = "car_racing" + ("_continuous" if continuous_actions else "_discrete")
+    experiment_name = "car_racing" + (
+        "_continuous" if continuous_actions else "_discrete"
+    )
 
     maxiter = 50
     n_trajectories = 150
     training_timesteps = 350000
-    policy_config = dict(buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5, device="auto")
+    policy_config = dict(
+        buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5, device="auto"
+    )
     # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
     lap_percent_complete = 0.33
     T = 400
@@ -151,7 +164,9 @@ if __name__ == "__main__":
         continuous_actions=continuous_actions,
     )
 
-    heuristic_theta_e, heuristic_theta_v = compute_heuristics(env.frame_width, env.frame_height, weight_forward, weight_speed_limitation)
+    heuristic_theta_e, heuristic_theta_v = compute_heuristics(
+        env.frame_width, env.frame_height, weight_forward, weight_speed_limitation
+    )
 
     # Learner config
     config_default_learner = create_config_learner(n_trajectories, maxiter)
@@ -190,8 +205,14 @@ if __name__ == "__main__":
     path_to_file = demo.render(show, store, 0)
 
     if path_to_file is not None:
-        #log a video to see how the demonstrator is performing
-        wandb.log({f"eval/video_{demo.agent_name}": wandb.Video(path_to_file, fps=4, format="mp4")})
+        # log a video to see how the demonstrator is performing
+        wandb.log(
+            {
+                f"eval/video_{demo.agent_name}": wandb.Video(
+                    path_to_file, fps=4, format="mp4"
+                )
+            }
+        )
 
     # clean up
     del demo.policy
