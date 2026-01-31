@@ -1,8 +1,8 @@
 import solvers.MDP_solver as MDP_solver
 from solvers.MDP_solver_exact import MDPSolverExactExpectation
-from environments.environment import Environment
+from environments.environment import Environment, ContinuousEnvironment
 from environments.simple_environment import SimpleEnvironment
-from environments.discrete_minigrid_environment import MinigridEnvironment
+from environments.discrete_minigrid_environment import DiscreteMinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
 from stable_baselines3 import PPO, DQN
@@ -177,7 +177,7 @@ class CrossingMinigridDemonstrator(Demonstrator):
 
     def __init__(
         self,
-        env: MinigridEnvironment,
+        env: DiscreteMinigridEnvironment,
         demonstrator_name: str,
         T: int = 45,
         n_trajectories: int = None,
@@ -305,7 +305,7 @@ class CarRacingDemonstrator(Demonstrator):
 
     def __init__(
         self,
-        env: MinigridEnvironment,
+        env: ContinuousEnvironment,
         demonstrator_name: str,
         continuous_actions: bool = True,
         T: int = 45,
