@@ -186,7 +186,7 @@ class Learner(Agent):
             # Recompute agent feature expectations
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
-            if t%10 == 0 and isinstance(self.solver, MDPSolverApproximation):
+            if (t%10 - 1) == 0 and isinstance(self.solver, MDPSolverApproximation):
                 # evaluate agent with a recorded episode
                 path_to_file = self.render(False, True)
                 if path_to_file is not None:
