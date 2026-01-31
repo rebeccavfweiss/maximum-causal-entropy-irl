@@ -7,14 +7,18 @@ import pandas as pd
 from random import randint
 import wandb
 from multiprocessing import Pool
-from itertools import product
 from pathlib import Path
 
 
 def create_minigrid_env(grid_size: int = 9):
 
+    theta = np.eye(2 * grid_size - 2, 2 * grid_size - 2)
+    theta[0, 0] = theta[1, 1] = -1.0
+    theta[-2, -2] = 10.0
+    theta[-1, -1] = -10.0
+
     config_env = {
-        "theta": np.diag([-1.0, -1.0, 0.5, 0.5, 10.0, -10.0]),
+        "theta": theta,
         "gamma": 1.0,
         "env_name": "MiniGrid-LavaCrossingS9N1-v0",
         "render_mode": "rgb_array",
@@ -26,10 +30,10 @@ def create_minigrid_env(grid_size: int = 9):
     return env
 
 
-def create_config_learner():
+def create_config_learner(grid_size):
     config_default_learner = {
-        "tol_exp": 0.005,
-        "tol_var": 0.125,
+        "tol_exp": 0.01 * max(1, grid_size / 10),
+        "tol_var": 0.125 * max(1, grid_size / 5),
         "miniter": 1,
         "maxiter": 5000,
     }
@@ -42,7 +46,7 @@ def run_experiment(args):
 
     run_name = f"minigrid_g{grid_size}_T{T}_run{i}"
     wandb.init(
-        project="mceirl-minigrid_2",
+        project="mceirl-minigrid_3",
         name=run_name,
         config={
             "grid_size": grid_size,
@@ -54,7 +58,7 @@ def run_experiment(args):
 
     # Create the environment, learner, demonstrator, etc
     env = create_minigrid_env(grid_size)
-    config_default_learner = create_config_learner()
+    config_default_learner = create_config_learner(grid_size)
 
     demo = demonstrator.CrossingMinigridDemonstrator(
         env,
@@ -73,6 +77,7 @@ def run_experiment(args):
     )
 
     # Expectation matching agent
+
     agent_expectation = learner.TabularLearner(
         env,
         demo.mu_demonstrator,
@@ -81,6 +86,7 @@ def run_experiment(args):
         solver=MDPSolver.MDPSolverExactExpectation(T),
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
+
     reward_expectation = env.compute_true_reward_for_agent(agent_expectation, None, T)
     wandb.log(
         {
@@ -92,6 +98,7 @@ def run_experiment(args):
     )
 
     # Variance matching agent
+
     agent_variance = learner.TabularLearner(
         env,
         demo.mu_demonstrator,
@@ -100,6 +107,7 @@ def run_experiment(args):
         solver=MDPSolver.MDPSolverExactVariance(T),
     )
     iter_variance, time_variance = agent_variance.batch_MCE()
+
     reward_variance = env.compute_true_reward_for_agent(agent_variance, None, T)
     wandb.log(
         {
@@ -109,6 +117,7 @@ def run_experiment(args):
             "time_avg_per_iter_variance": np.mean(time_variance),
         }
     )
+    agent_variance.render(store=True)
 
     wandb.finish()
 
@@ -134,7 +143,7 @@ if __name__ == "__main__":
 
     grid_sizes = [2 * i + 1 for i in range(2, 21, 3)]
     horizons = [2 * s + 2 for s in grid_sizes]
-    runs = 5
+    runs = 3
 
     tasks = []
     for grid_size in grid_sizes:
@@ -166,4 +175,6 @@ if __name__ == "__main__":
             "std_time_var",
         ],
     )
-    results_df.to_csv(Path("experiments") / "minigrid" / "results_parallel.csv")
+    results_df.to_csv(
+        Path("experiments") / "minigrid_new_rewards" / "results_parallel.csv"
+    )
