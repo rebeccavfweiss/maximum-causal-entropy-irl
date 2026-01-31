@@ -189,7 +189,8 @@ class Learner(Agent):
             # Recompute agent feature expectations
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
-            if isinstance(self.env, CarRacingEnvironment) and t%100 == 0:
+            if (t%10 - 1) == 0 and isinstance(self.solver, MDPSolverApproximation) and isinstance(self.env, CarRacingEnvironment):
+                # evaluate agent with a recorded episode
                 path_to_file = self.render(False, True)
                 if path_to_file is not None:
                     #log a video to see how the current policy is doing
@@ -336,6 +337,10 @@ class ApproximateLearner(Learner):
         solver to use (either only expectation matching or also variance matching) (must be an approximation solver)
     learning_rate
         custom learning rate (decreasing) function
+    heuristic_theta_e : ndarray
+        heuristic that should be used for theta_e to simplify training
+    heuristic_theta_v : ndarray
+        heuristic that should be used for theta_v to simplify training
     """
 
     def __init__(
@@ -345,10 +350,23 @@ class ApproximateLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverApproximation,
-        learning_rate = None
+        learning_rate = None,
+        heuristic_theta_e: np.ndarray = None,
+        heuristic_theta_v: np.ndarray = None
     ):
         
         super().__init__(env, mu_demonstrator, config_agent, agent_name, solver, learning_rate)
+
+        if heuristic_theta_e is not None:
+            assert heuristic_theta_e.shape[0] == self.env.n_features, f"heuristic for theta_e has wrong dimension(s), expected {self.env.n_features} got {heuristic_theta_e.shape}"
+
+            self.theta_e = heuristic_theta_e
+        
+        if heuristic_theta_v is not None:
+            assert heuristic_theta_v.shape == (self.env.n_features, self.env.n_features), f"heuristic for theta_v has wrong dimension(s), expexted {(self.env.n_features, self.env.n_features)} got {heuristic_theta_v.shape}"
+
+            self.theta_v = heuristic_theta_v
+
 
     def get_linear_reward(self) -> any:
         """

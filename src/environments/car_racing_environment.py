@@ -14,6 +14,7 @@ import os
 import numpy as np
 import utils
 from pathlib import Path
+import gym
 
 
 class CarRacingEnvironment(Environment):
@@ -37,6 +38,8 @@ class CarRacingEnvironment(Environment):
         self.n_frames = env_args["n_frames"]
         self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
+        self.gamma = env_args["gamma"]
+        self.continuous_actions = env_args["continuous_actions"]
 
         self.log_dir = Path("experiments")
 
@@ -53,7 +56,7 @@ class CarRacingEnvironment(Environment):
     def make_env(self):
         env_kwargs = {
             "render_mode": "rgb_array",
-            "continuous": True,
+            "continuous": self.continuous_actions,
             "lap_complete_percent": self.lap_complete_percent,
             "domain_randomize": False,
             "max_episode_steps": self.T
@@ -65,6 +68,7 @@ class CarRacingEnvironment(Environment):
             wrapper_kwargs={'width': self.frame_width, 'height': self.frame_height},
             env_kwargs=env_kwargs
         )
+        #env = VecNormalizeObs(env, NormalizeObs)
 
         return env
 
@@ -135,12 +139,14 @@ class CarRacingEnvironment(Environment):
         path : Path
             path to the file in which the video is stored
         """
+
+        name_prefix = "car_racing" + ("_continuous" if self.continuous_actions else "_discrete")
         env = VecVideoRecorder(
             self.env,
             video_folder=os.path.dirname(f"recordings\car_racing\{strname}.mp4") or ".",
             record_video_trigger=lambda step: True,  # record first episode
             video_length=T,
-            name_prefix=f"car_racing_{strname}",
+            name_prefix=f"{name_prefix}_{strname}",
         )
 
         obs = env.reset()
@@ -159,7 +165,7 @@ class CarRacingEnvironment(Environment):
 
         env.close()
 
-        return Path("recordings")/ "car_racing"/ f"car_racing_{strname}-step-0-to-step-{T}.mp4"
+        return Path("recordings")/ "car_racing"/ f"{name_prefix}_{strname}-step-0-to-step-{T}.mp4"
 
     def compute_true_reward_for_agent(
         self, agent, n_trajectories: int = None, T: int = None
@@ -193,6 +199,15 @@ class CarRacingEnvironment(Environment):
     def reset_reward_function(self):
         """Reset to the original vec_env with default rewards."""
         self.env = self._base_env
+
+    def set_max_episode_steps(self, new_steps: int):
+        for env in self.env.envs:
+            base_env = env
+            while isinstance(base_env, gym.Wrapper):
+                if isinstance(base_env, gym.wrappers.TimeLimit):
+                    base_env._max_episode_steps = new_steps
+                    break
+                base_env = base_env.env
 
     def evaluate_policy_custom(
         self,
@@ -260,3 +275,30 @@ class VecCustomRewardWrapper(VecEnvWrapper):
             for i in range(len(rewards))
         ])
         return next_obs, custom_rewards, dones, info
+    
+class NormalizeObs(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        obs_shape = self.observation_space.shape
+        self.observation_space = gym.spaces.Box(
+            low=0.0, high=1.0, shape=obs_shape, dtype=np.float32
+        )
+
+    def observation(self, obs):
+        return obs.astype(np.float32) / 255.0
+    
+class VecNormalizeObs(VecEnvWrapper):
+    def __init__(self, venv, obs_wrapper_cls):
+        self.obs_wrapper = obs_wrapper_cls(venv.envs[0])
+        super().__init__(venv)
+
+    def reset(self):
+        obs = self.venv.reset()
+        return obs.astype(np.float32) / 255.0
+
+    def step_async(self, actions):
+        self.venv.step_async(actions)
+
+    def step_wait(self):
+        obs, rewards, dones, infos = self.venv.step_wait()
+        return obs.astype(np.float32) / 255.0, rewards, dones, infos

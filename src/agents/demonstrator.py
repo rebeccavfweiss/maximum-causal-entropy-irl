@@ -5,7 +5,7 @@ from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import CallbackList
 from utils import TimedEvalCallback
 import os
@@ -291,6 +291,8 @@ class CarRacingDemonstrator(Demonstrator):
         the environment representing the setting of the problem
     demonstrator_name : str
         name of the demonstrator
+    continuous_actions : bool
+        whether the environment has a continous or action space
     T : int
         finite horizon value for the MDP solver
     gamma : float
@@ -305,16 +307,21 @@ class CarRacingDemonstrator(Demonstrator):
         self,
         env: MinigridEnvironment,
         demonstrator_name: str,
+        continuous_actions: bool = True,
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
-        time_steps: int = 1_250_000,
+        time_steps: int = 1_500_000,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
-        self.model_path = Path("models") / "car_racing" /"ppo_carracing.zip"
-        self.log_dir = Path("experiments") /"car_racing"/"demonstrator"
+        self.continuous_actions = continuous_actions
+        if continuous_actions:
+            self.model_path = Path("models") / solver.experiment_name / "ppo_carracing"
+        else:
+            self.model_path = Path("models") / solver.experiment_name / "dqn_carracing"
 
+        self.log_dir = Path("experiments") / solver.experiment_name / "demonstrator"
 
         self.policy = self.__train_demonstrator(time_steps)
 
@@ -323,28 +330,46 @@ class CarRacingDemonstrator(Demonstrator):
     def __train_demonstrator(self, time_steps: int):
         if os.path.exists(self.model_path):
             wandb.log({"use_pretrained_model": True})
-            model = PPO.load(self.model_path, env=self.env.env)
-
+            if self.continuous_actions:
+                model = PPO.load(self.model_path / "best_model.zip", env=self.env.env)
+            else:
+                model = DQN.load(
+                    self.model_path / "best_model.zip", device="auto", env=self.env.env
+                )
         else:
             wandb.log({"use_pretrained_model": False})
-            model = PPO("CnnPolicy", self.env.env, verbose=0)
 
-            callback = CallbackList([
-                        TimedEvalCallback(self.env.env_val,
-                             best_model_save_path=self.model_path,
-                             log_path=self.log_dir,
-                             eval_freq=25_000,
-                             render=False,
-                             n_eval_episodes=10),
-                        WandbCallback(model_save_path=self.model_path, verbose=1)])
-            
-            model.learn(total_timesteps=time_steps, progress_bar=True, callback=callback)
+            if self.continuous_actions:
+                model = PPO("CnnPolicy", self.env.env, verbose=0)
+            else:
+                model = DQN("CnnPolicy", self.env.env, verbose=0, buffer_size=250000)
+
+            callback = CallbackList(
+                [
+                    TimedEvalCallback(
+                        self.env.env_val,
+                        best_model_save_path=self.model_path,
+                        log_path=self.log_dir,
+                        eval_freq=15_000,
+                        render=False,
+                        n_eval_episodes=10,
+                    ),
+                    WandbCallback(model_save_path=self.model_path, verbose=1),
+                ]
+            )
+
+            model.learn(
+                total_timesteps=time_steps, progress_bar=True, callback=callback
+            )
 
             artifact = wandb.Artifact(f"demonstrator_model", type="model")
-            artifact.add_file(self.model_path)
+            artifact.add_file(self.model_path / "best_model.zip")
             wandb.log_artifact(artifact)
 
-            #actually use best model and not last
-            model = PPO.load(self.model_path)
+            # actually use best model and not last
+            if self.continuous_actions:
+                model = PPO.load(self.model_path / "best_model")
+            else:
+                model = DQN.load(self.model_path / "best_model")
 
         return ModelPolicy(model)
