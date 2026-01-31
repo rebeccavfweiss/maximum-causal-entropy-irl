@@ -1,6 +1,6 @@
 import numpy as np
 from pathlib import Path
-from MDP_solver import MDPSolver
+from solvers.MDP_solver import MDPSolver
 from environments.environment import Environment
 from policy import Policy, ModelPolicy
 from stable_baselines3 import SAC, DQN
@@ -9,6 +9,7 @@ from utils import TimedEvalCallback
 from wandb.integration.sb3 import WandbCallback
 
 import os
+
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 
 
@@ -53,7 +54,7 @@ class MDPSolverApproximation(MDPSolver):
         compute_variance: bool,
         continuous_actions: bool,
         policy_config: dict[str, any],
-        training_timesteps : int = 10000,
+        training_timesteps: int = 10000,
         log_dir: str = None,
         model_dir: str = None,
     ):
@@ -136,12 +137,11 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
     def __init__(
         self,
         experiment_name: str,
-        continuous_actions : bool,
-        policy_config : dict[str, any],
-        training_timesteps : int =10000,
+        continuous_actions: bool,
+        policy_config: dict[str, any],
+        training_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = False,
-        
     ):
         super().__init__(
             T,
@@ -149,8 +149,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
             continuous_actions,
             policy_config,
             training_timesteps,
-            log_dir=Path("experiments")/experiment_name/"agent_expectation",
-            model_dir=Path("models")/experiment_name/"agent_expectation",
+            log_dir=Path("experiments") / experiment_name / "agent_expectation",
+            model_dir=Path("models") / experiment_name / "agent_expectation",
         )
         self.experiment_name = experiment_name
 
@@ -173,15 +173,27 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.set_custom_reward_function(lambda s: values["reward"](s.flatten()))
 
+        # TODO make this more elegant
+
         if self.continuous_actions:
-            model = SAC("CnnPolicy", env.env, verbose=0, **self.policy_config)
+            model = SAC(
+                "CnnPolicy",
+                env if "minigrid-discrete" in self.experiment_name else env.env,
+                verbose=0,
+                **self.policy_config
+            )
         else:
-            model = DQN("CnnPolicy", env.env, verbose=0, **self.policy_config)
+            model = DQN(
+                "CnnPolicy",
+                env if "minigrid-discrete" in self.experiment_name else env.env,
+                verbose=0,
+                **self.policy_config
+            )
 
         callback = CallbackList(
             [
                 TimedEvalCallback(
-                    env.env,
+                    env if "minigrid-discrete" in self.experiment_name else env.env,
                     best_model_save_path=self.model_dir,
                     log_path=self.log_dir,
                     eval_freq=max(10, int(self.training_timesteps / 100)),
@@ -193,16 +205,18 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         )
 
         model.learn(
-            total_timesteps=self.training_timesteps, callback=callback, progress_bar=True
+            total_timesteps=self.training_timesteps,
+            callback=callback,
+            progress_bar=True,
         )
 
         env.reset_reward_function()
 
         if self.continuous_actions:
-        # actually return best trained model and not last
-            return ModelPolicy(SAC.load(self.model_dir/"best_model"))
-        else: 
-            return ModelPolicy(DQN.load(self.model_dir/"best_model"))
+            # actually return best trained model and not last
+            return ModelPolicy(SAC.load(self.model_dir / "best_model"))
+        else:
+            return ModelPolicy(DQN.load(self.model_dir / "best_model"))
 
 
 class MDPSolverApproximationVariance(MDPSolverApproximation):
@@ -235,11 +249,10 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         self,
         experiment_name: str,
         continuous_actions: bool,
-        policy_config: dict[str,any],
+        policy_config: dict[str, any],
         training_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = True,
-
     ):
         super().__init__(
             T,
@@ -247,8 +260,8 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             continuous_actions,
             policy_config,
             training_timesteps,
-            log_dir=Path("experiments")/experiment_name/"agent_variance",
-            model_dir=Path("models")/experiment_name/"agent_variance",
+            log_dir=Path("experiments") / experiment_name / "agent_variance",
+            model_dir=Path("models") / experiment_name / "agent_variance",
         )
         self.experiment_name = experiment_name
 
@@ -275,14 +288,24 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         )
 
         if self.continuous_actions:
-            model = SAC("CnnPolicy", env.env, verbose=0, **self.policy_config)
+            model = SAC(
+                "CnnPolicy",
+                env if "minigrid-discrete" in self.experiment_name else env.env,
+                verbose=0,
+                **self.policy_config
+            )
         else:
-            model = DQN("CnnPolicy", env.env, verbose=0, **self.policy_config)
+            model = DQN(
+                "CnnPolicy",
+                env if "minigrid-discrete" in self.experiment_name else env.env,
+                verbose=0,
+                **self.policy_config
+            )
 
         callback = CallbackList(
             [
                 TimedEvalCallback(
-                    env.env,
+                    env if "minigrid-discrete" in self.experiment_name else env.env,
                     best_model_save_path=self.model_dir,
                     log_path=self.log_dir,
                     eval_freq=max(10, int(self.training_timesteps / 100)),
@@ -294,13 +317,15 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         )
 
         model.learn(
-            total_timesteps=self.training_timesteps, callback=callback, progress_bar=True
+            total_timesteps=self.training_timesteps,
+            callback=callback,
+            progress_bar=True,
         )
 
         env.reset_reward_function()
 
         if self.continuous_actions:
-        # actually return best trained model and not last
-            return ModelPolicy(SAC.load(self.model_dir/"best_model"))
-        else: 
-            return ModelPolicy(DQN.load(self.model_dir/"best_model"))
+            # actually return best trained model and not last
+            return ModelPolicy(SAC.load(self.model_dir / "best_model"))
+        else:
+            return ModelPolicy(DQN.load(self.model_dir / "best_model"))

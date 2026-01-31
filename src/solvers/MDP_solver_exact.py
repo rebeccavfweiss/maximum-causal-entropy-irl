@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 from scipy import sparse
-from MDP_solver import MDPSolver
+from solvers.MDP_solver import MDPSolver
 from environments.environment import Environment
 from policy import Policy, TabularPolicy
 
@@ -26,7 +26,6 @@ class MDPSolverExact(MDPSolver):
 
     def __init__(self, T: int, compute_variance: bool):
         super().__init__(T, compute_variance)
-
 
     def softmax_list(self, A: np.ndarray, n_states: int) -> np.ndarray:
         """
@@ -100,9 +99,11 @@ class MDPSolverExact(MDPSolver):
 
         return T_pi
 
-    
     def compute_feature_SVF_bellmann(
-        self, env: Environment, policy: Policy, trajectory:list[tuple[int,int,int,float]]=None
+        self,
+        env: Environment,
+        policy: Policy,
+        trajectory: list[tuple[int, int, int, float]] = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         computes feature SVF
@@ -153,7 +154,12 @@ class MDPSolverExact(MDPSolver):
 
         return feature_expectation, feature_variance
 
-    def compute_SV(self, env:Environment, policy:Policy, trajectory:list[tuple[any,int,any, float]]=None) -> np.ndarray:
+    def compute_SV(
+        self,
+        env: Environment,
+        policy: Policy,
+        trajectory: list[tuple[any, int, any, float]] = None,
+    ) -> np.ndarray:
         """
         Computes State value counts
 
@@ -174,7 +180,7 @@ class MDPSolverExact(MDPSolver):
         if trajectory is None:
             # Creating a T matrix for the policy
             T_pi = self.get_T_pi(env, policy)
-        else: 
+        else:
             T_pi = self.get_T_pi_from_trajectory(env, trajectory)
 
         for s in env.terminal_states:
@@ -272,9 +278,7 @@ class MDPSolverExactExpectation(MDPSolverExact):
     def __init__(self, T: int = 45, compute_variance: bool = False):
         super().__init__(T, compute_variance)
 
-    def soft_value_iteration(
-        self, env: Environment, values: dict[str:any]
-    ) -> Policy:
+    def soft_value_iteration(self, env: Environment, values: dict[str:any]) -> Policy:
         """
         computes soft value iteration using feature expectation matching (using recurive evaluation as finite horizon)
 
@@ -344,9 +348,7 @@ class MDPSolverExactVariance(MDPSolverExact):
     def __init__(self, T: int = 45, compute_variance: bool = True):
         super().__init__(T, compute_variance)
 
-    def soft_value_iteration(
-        self, env: Environment, values: dict[str:any]
-    ) -> Policy:
+    def soft_value_iteration(self, env: Environment, values: dict[str:any]) -> Policy:
         """
         computes soft value iteration using feature expectation and variance matching
 
