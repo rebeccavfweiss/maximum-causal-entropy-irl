@@ -1,15 +1,13 @@
-from environments.environment import Environment
+from environments.environment import ContinuousEnvironment
 from policy import Policy
 from stable_baselines3.common.vec_env import (
     VecFrameStack,
     VecVideoRecorder,
     VecEnvWrapper,
-    VecEnv
 )
 from stable_baselines3.common.atari_wrappers import WarpFrame
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.evaluation import evaluate_policy
 import os
 import numpy as np
 import utils
@@ -17,7 +15,7 @@ from pathlib import Path
 import gym
 
 
-class CarRacingEnvironment(Environment):
+class CarRacingEnvironment(ContinuousEnvironment):
     """
     Wrapper class for the gymnasium car racing environment <https://gymnasium.farama.org/environments/box2d/car_racing/>
     in order to work with our agents
@@ -36,19 +34,16 @@ class CarRacingEnvironment(Environment):
         self.frame_width = env_args["width"]
         self.frame_height = env_args["height"]
         self.n_frames = env_args["n_frames"]
-        self.T = env_args["T"]
         self.lap_complete_percent = env_args["lap_complete_percent"]
-        self.gamma = env_args["gamma"]
-        self.continuous_actions = env_args["continuous_actions"]
 
-        self.log_dir = Path("experiments")
+        self.continuous_actions = env_args["continuous_actions"]
 
         env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
         self.env = VecTransposeImage(env)
 
         env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
         self.env_val = VecTransposeImage(env)
-        
+
         self._base_env = self.env
 
         self.n_features = self.env.observation_space.sample().flatten().shape[0]
@@ -59,55 +54,18 @@ class CarRacingEnvironment(Environment):
             "continuous": self.continuous_actions,
             "lap_complete_percent": self.lap_complete_percent,
             "domain_randomize": False,
-            "max_episode_steps": self.T
+            "max_episode_steps": self.T,
         }
         env = make_vec_env(
             "CarRacing-v3",
             n_envs=1,
             wrapper_class=WarpFrame,
-            wrapper_kwargs={'width': self.frame_width, 'height': self.frame_height},
-            env_kwargs=env_kwargs
+            wrapper_kwargs={"width": self.frame_width, "height": self.frame_height},
+            env_kwargs=env_kwargs,
         )
-        #env = VecNormalizeObs(env, NormalizeObs)
+        # env = VecNormalizeObs(env, NormalizeObs)
 
         return env
-
-    def reset(self) -> any:
-        """
-        Reset wrapper to generalize environment access over different environments
-
-        Returns
-        -------
-        Initial state description
-        """
-
-        state = self.env.reset()
-
-        return state
-
-    def step(self, action: int) -> tuple[any, float, bool, bool]:
-        """
-        Step wrapper to generalize environment access over different environments
-
-        Parameters
-        ----------
-        action : int
-            action to take
-
-        Returns
-        -------
-        new_state
-            current state description
-        reward : float
-            reward for taken action
-        terminated : bool
-            if episode is terminated
-        truncated : bool
-            if episode was truncated
-        """
-        new_state, reward, terminated, truncated = self.env.step(action)
-
-        return new_state, reward, terminated, truncated
 
     def render(
         self,
@@ -140,7 +98,9 @@ class CarRacingEnvironment(Environment):
             path to the file in which the video is stored
         """
 
-        name_prefix = "car_racing" + ("_continuous" if self.continuous_actions else "_discrete")
+        name_prefix = "car_racing" + (
+            "_continuous" if self.continuous_actions else "_discrete"
+        )
         env = VecVideoRecorder(
             self.env,
             video_folder=os.path.dirname(f"recordings\car_racing\{strname}.mp4") or ".",
@@ -165,40 +125,15 @@ class CarRacingEnvironment(Environment):
 
         env.close()
 
-        return Path("recordings")/ "car_racing"/ f"{name_prefix}_{strname}-step-0-to-step-{T}.mp4"
+        return (
+            Path("recordings")
+            / "car_racing"
+            / f"{name_prefix}_{strname}-step-0-to-step-{T}.mp4"
+        )
 
-    def compute_true_reward_for_agent(
-        self, agent, n_trajectories: int = None, T: int = None
-    ) -> float:
-        """
-        Compute the true reward in the environment either with the given policy or with trajectories
-
-        Parameters
-        ----------
-        agent
-            agent/demonstrator that should be evaluated in the environment
-        n_trajectories : int
-            number of trajectories to use, if None then we use the reward vector
-
-        Returns
-        -------
-        reward : float
-            true reward for the given policy (approximated based on trajectories)
-        """
-        #mean_reward, std_reward = evaluate_policy(agent.policy.model, self.env, n_eval_episodes=n_trajectories)
-        
-        mean_reward, std_reward = self.evaluate_policy_custom(agent.policy.model, self.env, n_trajectories, T)
-        print(f"Mean reward: {mean_reward:.2f} +/- {std_reward:.2f}")
-
-        return mean_reward
-    
     def set_custom_reward_function(self, custom_reward_fn):
         """Wrap the original vec_env with a custom reward function."""
         self.env = VecCustomRewardWrapper(self._base_env, custom_reward_fn)
-
-    def reset_reward_function(self):
-        """Reset to the original vec_env with default rewards."""
-        self.env = self._base_env
 
     def set_max_episode_steps(self, new_steps: int):
         for env in self.env.envs:
@@ -208,48 +143,6 @@ class CarRacingEnvironment(Environment):
                     base_env._max_episode_steps = new_steps
                     break
                 base_env = base_env.env
-
-    def evaluate_policy_custom(
-        self,
-        model,
-        vec_env: VecEnv,
-        n_eval_episodes: int = 5,
-        T:int=1000,
-        deterministic: bool = True,
-        render: bool = False,
-    ) -> tuple[float, float]:
-        """
-        Custom evaluation function that uses actual env.step() rewards
-        instead of relying on info["episode"]["r"].
-
-        Assumes n_envs = 1 (can be extended).
-        """
-        episode_rewards = []
-        n_envs = vec_env.num_envs
-        assert n_envs == 1, "This custom evaluator only supports n_envs=1 for now."
-
-        for _ in range(n_eval_episodes):
-            obs = vec_env.reset()
-            done = False
-            info = []
-            total_reward = 0.0
-            t=1
-            while (not (done or utils.is_truncated_from_infos(info))) and t<=T:
-                action, _ = model.predict(obs, deterministic=deterministic)
-                
-                obs, reward, done, info = vec_env.step(action)
-                
-                total_reward += reward[0]  # reward is vectorized: shape (n_envs,)
-
-                if render:
-                    vec_env.render()
-                t+=1
-
-            episode_rewards.append(total_reward)
-
-        mean_reward = np.mean(episode_rewards)
-        std_reward = np.std(episode_rewards)
-        return mean_reward, std_reward
 
 
 class VecCustomRewardWrapper(VecEnvWrapper):
@@ -270,12 +163,12 @@ class VecCustomRewardWrapper(VecEnvWrapper):
     def step_wait(self):
         next_obs, rewards, dones, info = self.venv.step_wait()
         # Apply custom reward function vector-wise
-        custom_rewards = np.array([
-            self.custom_reward_fn(next_obs[i])
-            for i in range(len(rewards))
-        ])
+        custom_rewards = np.array(
+            [self.custom_reward_fn(next_obs[i]) for i in range(len(rewards))]
+        )
         return next_obs, custom_rewards, dones, info
-    
+
+
 class NormalizeObs(gym.ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -286,7 +179,8 @@ class NormalizeObs(gym.ObservationWrapper):
 
     def observation(self, obs):
         return obs.astype(np.float32) / 255.0
-    
+
+
 class VecNormalizeObs(VecEnvWrapper):
     def __init__(self, venv, obs_wrapper_cls):
         self.obs_wrapper = obs_wrapper_cls(venv.envs[0])
