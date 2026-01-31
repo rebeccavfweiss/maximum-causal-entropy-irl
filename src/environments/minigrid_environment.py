@@ -5,7 +5,7 @@ import minigrid
 from policy import Policy
 import imageio
 from environments.environment import GridEnvironment
-
+from pathlib import Path
 
 class MinigridEnvironment(GridEnvironment):
     """
@@ -122,7 +122,7 @@ class MinigridEnvironment(GridEnvironment):
             t += 1
         if store:
             imageio.mimsave(
-                f"recordings\minigrid\{strname}.mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
+                Path("recordings")/ "minigrid"/ f"{strname}.mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
             )
 
     @abstractmethod

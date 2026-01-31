@@ -26,7 +26,7 @@ def create_minigrid_env(grid_size: int = 9):
 
 
 def create_config_learner():
-    config_default_learner = {"tol": 0.005, "miniter": 1, "maxiter": 5000}
+    config_default_learner = {"tol_exp": 0.005,"tol_var":0.125, "miniter": 1, "maxiter": 5000}
 
     return config_default_learner
 
@@ -35,7 +35,7 @@ def run_experiment(args):
 
     run_name = f"minigrid_g{grid_size}_T{T}_run{i}"
     wandb.init(
-        project="mceirl-minigrid",
+        project="mceirl-minigrid_2",
         name=run_name,
         config={
             "grid_size": grid_size,
@@ -123,7 +123,7 @@ if __name__ == "__main__":
             for i in range(runs):
                 tasks.append((grid_size, T, i))
 
-    with Pool() as pool:
+    with Pool(processes=10) as pool:
         results = pool.map(run_experiment, tasks)
 
     results_df = pd.DataFrame(
