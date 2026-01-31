@@ -7,7 +7,8 @@ import imageio
 from environments.environment import GridEnvironment
 from pathlib import Path
 
-class MinigridEnvironment(GridEnvironment):
+
+class DiscreteMinigridEnvironment(GridEnvironment):
     """
     Environment class exposing desired functionality from gymnasium.Environments and adding necessary information for training in these environments
 
@@ -32,7 +33,7 @@ class MinigridEnvironment(GridEnvironment):
         # inelegant way to move around unwanted wrappers to get to raw data structures
         self.env = self.env.env.env
         if env_args["use_CoordStateWrapper"]:
-            self.env = CrossingCoordStateWrapper(self.env, seed = self.seed)        
+            self.env = CrossingCoordStateWrapper(self.env, seed=self.seed)
 
         self.n_actions = self.env.action_space.n
 
@@ -87,7 +88,13 @@ class MinigridEnvironment(GridEnvironment):
         return new_state, reward, terminated, truncated
 
     def render(
-        self, policy: Policy, T: int = 20, store:bool=False, strname: str = "", fps: int = 1, **kwargs
+        self,
+        policy: Policy,
+        T: int = 20,
+        store: bool = False,
+        strname: str = "",
+        fps: int = 1,
+        **kwargs,
     ) -> None:
         """
         Function to record a video of the given policy in the environment
@@ -122,7 +129,9 @@ class MinigridEnvironment(GridEnvironment):
             t += 1
         if store:
             imageio.mimsave(
-                Path("recordings")/ "minigrid"/ f"{strname}.mp4", [np.array(img) for i, img in enumerate(images)], fps=fps
+                Path("recordings") / "minigrid" / f"{strname}.mp4",
+                [np.array(img) for i, img in enumerate(images)],
+                fps=fps,
             )
 
     @abstractmethod
@@ -130,7 +139,7 @@ class MinigridEnvironment(GridEnvironment):
         pass
 
 
-class CrossingMiniGridEnvironment(MinigridEnvironment):
+class CrossingMiniGridEnvironment(DiscreteMinigridEnvironment):
     """
     Class to work specifically with the MiniGrid Crossing environment
 
@@ -155,33 +164,25 @@ class CrossingMiniGridEnvironment(MinigridEnvironment):
             representing full feature matrix
         """
 
-        feature_matrix = np.zeros((self.n_states, 6))
+        feature_matrix = np.zeros(
+            (self.n_states, 2 + 2 * len(self.env.forbidden_states + 2))
+        )
         grid = self.env.env.grid
 
-        for n in range(self.n_states-1):
+        for n in range(self.n_states - 1):
             x, y, _ = self.env.from_state_index(n)
-            feature_matrix[n][0] = abs(x - self.env.goal_position[0]) / self.env.width
-            feature_matrix[n][1] = abs(y - self.env.goal_position[1]) / self.env.height
-            feature_matrix[n][2] = (
-                np.min(
-                    [
-                        abs(x - self.env.forbidden_states[i][0])
-                        for i in range(len(self.env.forbidden_states))
-                    ]
-                )
-                / self.env.width
-            )
-            feature_matrix[n][3] = (
-                np.min(
-                    [
-                        abs(y - self.env.forbidden_states[i][1])
-                        for i in range(len(self.env.forbidden_states))
-                    ]
-                )
-                / self.env.width
-            )
-            feature_matrix[n][4] = [x, y] == self.env.goal_position
-            feature_matrix[n][5] = float(
+            feature_matrix[n][0] = (x - self.env.goal_position[0]) / self.env.width
+            feature_matrix[n][1] = (y - self.env.goal_position[1]) / self.env.height
+            for i in range(len(self.env.forbidden_states)):
+                feature_matrix[n][3 + 2 * i] = (
+                    x - self.env.forbidden_states[i][0]
+                ) / self.env.width**2
+                feature_matrix[n][3 + 2 * i + 2] = (
+                    y - self.env.forbidden_states[i][1]
+                ) / self.env.height**2
+
+            feature_matrix[n][-2] = [x, y] == self.env.goal_position
+            feature_matrix[n][-1] = float(
                 (grid.get(x, y) is not None)
                 and (grid.get(x, y).type in {"wall", "lava"})
             )
@@ -239,13 +240,13 @@ class CrossingMiniGridEnvironment(MinigridEnvironment):
                         if done or (list(next_pos) == self.env.goal_position):
                             terminal_states.append(next_state)
 
-        #all terminal states can only reach the absorbing state
+        # all terminal states can only reach the absorbing state
         for s in set(terminal_states):
-            transition_matrix[s,:,:] = 0.0
-            transition_matrix[s, self.n_states-1, :] = 1.0
+            transition_matrix[s, :, :] = 0.0
+            transition_matrix[s, self.n_states - 1, :] = 1.0
 
-        #agent cannot leave absorbing state
-        transition_matrix[self.n_states-1,self.n_states-1,:] = 1.0
+        # agent cannot leave absorbing state
+        transition_matrix[self.n_states - 1, self.n_states - 1, :] = 1.0
 
         return transition_matrix, terminal_states
 
@@ -295,14 +296,14 @@ class CrossingCoordStateWrapper(gym.ObservationWrapper):
         seed to fix randomization
     """
 
-    def __init__(self, env: gym.Env, seed:int = None):
+    def __init__(self, env: gym.Env, seed: int = None):
         super().__init__(env)
         self.width = env.width
         self.height = env.height
         self.n_orientations = 4  # possible orientations (0-3)
         self.n_actions = 3  # restrict actions to actually used ones in the environment
         self.seed = seed
-        self.env.reset(seed = self.seed)
+        self.env.reset(seed=self.seed)
         self.grid = env.grid
         self.forbidden_states = self.compute_forbidden_states()
         self.goal_position = [self.width - 2, self.height - 2]
@@ -448,27 +449,25 @@ class CrossingCoordStateWrapper(gym.ObservationWrapper):
 
         # Implement your custom reward logic
         if state_coordinates is not None and state_index is not None:
-            diff_goal_x = abs(state_coordinates[0] - self.goal_position[0]) / self.width
-            diff_goal_y = abs(state_coordinates[1] - self.goal_position[1]) / self.height
-            diff_lava_x = (
-                np.min(
-                    [
-                        abs(state_coordinates[0] - self.forbidden_states[i][0])
-                        for i in range(len(self.forbidden_states))
-                    ]
-                )
-                / self.width
+            diff_goal_x = (state_coordinates[0] - self.goal_position[0]) / self.width
+            diff_goal_y = (state_coordinates[1] - self.goal_position[1]) / self.height
+            diff_lava_x = np.array(
+                [
+                    (state_coordinates[0] - self.forbidden_states[i][0]) / self.width**2
+                    for i in range(len(self.forbidden_states))
+                ]
             )
-            diff_lava_y = (
-                np.min(
-                    [
-                        abs(state_coordinates[1] - self.forbidden_states[i][1])
-                        for i in range(len(self.forbidden_states))
-                    ]
-                )
-                / self.height
+            diff_lava_y = np.array(
+                [
+                    (state_coordinates[1] - self.forbidden_states[i][1])
+                    / self.height**2
+                    for i in range(len(self.forbidden_states))
+                ]
             )
-            reward = -(diff_goal_x**2 + diff_goal_y**2) + 0.5*(diff_lava_x**2 + diff_lava_y**2)
+
+            reward = -(diff_goal_x**2 + diff_goal_y**2) + (
+                diff_lava_x.dot(diff_lava_x) + diff_lava_y.dot(diff_lava_y)
+            )
             if done:
                 if (diff_goal_x == 0) and (diff_goal_y == 0):
                     reward += 10
