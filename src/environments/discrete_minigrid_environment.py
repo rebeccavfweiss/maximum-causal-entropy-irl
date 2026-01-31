@@ -165,29 +165,39 @@ class CrossingMiniGridEnvironment(DiscreteMinigridEnvironment):
         """
 
         feature_matrix = np.zeros(
-            (self.n_states, 2 + 2 * len(self.env.forbidden_states + 2))
+            (self.n_states, 2 + 2 * len(self.env.forbidden_states) + 2)
         )
-        grid = self.env.env.grid
 
-        for n in range(self.n_states - 1):
-            x, y, _ = self.env.from_state_index(n)
-            feature_matrix[n][0] = (x - self.env.goal_position[0]) / self.env.width
-            feature_matrix[n][1] = (y - self.env.goal_position[1]) / self.env.height
-            for i in range(len(self.env.forbidden_states)):
-                feature_matrix[n][3 + 2 * i] = (
-                    x - self.env.forbidden_states[i][0]
-                ) / self.env.width**2
-                feature_matrix[n][3 + 2 * i + 2] = (
-                    y - self.env.forbidden_states[i][1]
-                ) / self.env.height**2
-
-            feature_matrix[n][-2] = [x, y] == self.env.goal_position
-            feature_matrix[n][-1] = float(
-                (grid.get(x, y) is not None)
-                and (grid.get(x, y).type in {"wall", "lava"})
-            )
-
+        for i in range(self.n_states - 1):
+            feature_matrix[i, :] = self.__get_state_feature_vector_full(i)
         return feature_matrix
+
+    def __get_state_feature_vector_full(self, state: int) -> np.ndarray:
+        """
+        Returns
+        -------
+        feature_vector : ndarray
+            represents the features of the given state
+        """
+        grid = self.env.env.grid
+        feature_vector = np.zeros(2 * self.env.width - 2)
+        x, y, _ = self.env.from_state_index(state)
+        feature_vector[0] = (x - self.env.goal_position[0]) / self.env.width
+        feature_vector[1] = (y - self.env.goal_position[1]) / self.env.height
+        for i in range(len(self.env.forbidden_states)):
+            feature_vector[3 + 2 * i] = (
+                x - self.env.forbidden_states[i][0]
+            ) / self.env.width**2
+            feature_vector[3 + 2 * i + 2] = (
+                y - self.env.forbidden_states[i][1]
+            ) / self.env.height**2
+
+        feature_vector[-2] = [x, y] == self.env.goal_position
+        feature_vector[-1] = float(
+            (grid.get(x, y) is not None) and (grid.get(x, y).type in {"wall", "lava"})
+        )
+
+        return feature_vector
 
     def _compute_transition_matrix(self) -> tuple[np.ndarray, list[int]]:
         """
