@@ -307,7 +307,7 @@ class CarRacingDemonstrator(Demonstrator):
         self,
         env: MinigridEnvironment,
         demonstrator_name: str,
-        continuous_actions : bool = True,
+        continuous_actions: bool = True,
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
@@ -317,11 +317,11 @@ class CarRacingDemonstrator(Demonstrator):
 
         self.continuous_actions = continuous_actions
         if continuous_actions:
-            self.model_path = Path("models") / solver.experiment_name /"ppo_carracing"
-        else: 
-            self.model_path = Path("models")/solver.experiment_name /"dqn_carracing"  
-        
-        self.log_dir = Path("experiments") /solver.experiment_name/"demonstrator"
+            self.model_path = Path("models") / solver.experiment_name / "ppo_carracing"
+        else:
+            self.model_path = Path("models") / solver.experiment_name / "dqn_carracing"
+
+        self.log_dir = Path("experiments") / solver.experiment_name / "demonstrator"
 
         self.policy = self.__train_demonstrator(time_steps)
 
@@ -331,36 +331,45 @@ class CarRacingDemonstrator(Demonstrator):
         if os.path.exists(self.model_path):
             wandb.log({"use_pretrained_model": True})
             if self.continuous_actions:
-                model = PPO.load(self.model_path/"best_model.zip", env=self.env.env)
+                model = PPO.load(self.model_path / "best_model.zip", env=self.env.env)
             else:
-                model = DQN.load(self.model_path/"best_model.zip", env=self.env.env)
+                model = DQN.load(
+                    self.model_path / "best_model.zip", device="auto", env=self.env.env
+                )
         else:
             wandb.log({"use_pretrained_model": False})
 
             if self.continuous_actions:
                 model = PPO("CnnPolicy", self.env.env, verbose=0)
-            else: 
+            else:
                 model = DQN("CnnPolicy", self.env.env, verbose=0, buffer_size=250000)
 
-            callback = CallbackList([
-                        TimedEvalCallback(self.env.env_val,
-                             best_model_save_path=self.model_path,
-                             log_path=self.log_dir,
-                             eval_freq=15_000,
-                             render=False,
-                             n_eval_episodes=10),
-                        WandbCallback(model_save_path=self.model_path, verbose=1)])
-            
-            model.learn(total_timesteps=time_steps, progress_bar=True, callback=callback)
+            callback = CallbackList(
+                [
+                    TimedEvalCallback(
+                        self.env.env_val,
+                        best_model_save_path=self.model_path,
+                        log_path=self.log_dir,
+                        eval_freq=15_000,
+                        render=False,
+                        n_eval_episodes=10,
+                    ),
+                    WandbCallback(model_save_path=self.model_path, verbose=1),
+                ]
+            )
+
+            model.learn(
+                total_timesteps=time_steps, progress_bar=True, callback=callback
+            )
 
             artifact = wandb.Artifact(f"demonstrator_model", type="model")
-            artifact.add_file(self.model_path/"best_model.zip")
+            artifact.add_file(self.model_path / "best_model.zip")
             wandb.log_artifact(artifact)
 
-            #actually use best model and not last
+            # actually use best model and not last
             if self.continuous_actions:
-                model = PPO.load(self.model_path/"best_model")
+                model = PPO.load(self.model_path / "best_model")
             else:
-                model = DQN.load(self.model_path/"best_model")
+                model = DQN.load(self.model_path / "best_model")
 
         return ModelPolicy(model)
