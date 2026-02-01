@@ -12,7 +12,7 @@ import os
 import numpy as np
 import utils
 from pathlib import Path
-import gym
+import gymnasium as gym
 
 
 class CarRacingEnvironment(ContinuousEnvironment):
@@ -134,15 +134,6 @@ class CarRacingEnvironment(ContinuousEnvironment):
     def set_custom_reward_function(self, custom_reward_fn):
         """Wrap the original vec_env with a custom reward function."""
         self.env = VecCustomRewardWrapper(self._base_env, custom_reward_fn)
-
-    def set_max_episode_steps(self, new_steps: int):
-        for env in self.env.envs:
-            base_env = env
-            while isinstance(base_env, gym.Wrapper):
-                if isinstance(base_env, gym.wrappers.TimeLimit):
-                    base_env._max_episode_steps = new_steps
-                    break
-                base_env = base_env.env
 
 
 class VecCustomRewardWrapper(VecEnvWrapper):
