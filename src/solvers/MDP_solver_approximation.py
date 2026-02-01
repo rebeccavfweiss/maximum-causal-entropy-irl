@@ -40,6 +40,8 @@ class MDPSolverApproximation(MDPSolver):
             soft update coefficient ("Polyak update", between 0 and 1)
         train_freq: int
             number of training steps after which the target network should be updated
+    policy_kwargs : dict
+        additional information for the custom feature extractor that is necessary for small environments to adjust the kernel size of the policy
     training_timesteps : int
             timesteps for embedded SAC/DQN training in the approximated SVI
     log_dir : str
@@ -54,6 +56,7 @@ class MDPSolverApproximation(MDPSolver):
         compute_variance: bool,
         continuous_actions: bool,
         policy_config: dict[str, any],
+        policy_kwargs: dict = None,
         training_timesteps: int = 10000,
         log_dir: str = None,
         model_dir: str = None,
@@ -63,6 +66,7 @@ class MDPSolverApproximation(MDPSolver):
 
         self.continuous_actions = continuous_actions
         self.policy_config = policy_config
+        self.policy_kwargs = policy_kwargs
         self.training_timesteps = training_timesteps
 
         self.log_dir = log_dir
@@ -126,6 +130,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
             soft update coefficient ("Polyak update", between 0 and 1)
         train_freq: int
             number of training steps after which the target network should be updated
+    policy_kwargs : dict
+        additional information for the custom feature extractor that is necessary for small environments to adjust the kernel size of the policy
     training_timesteps : int
             timesteps for embedded SAC/DQN training in the approximated SVI
     T : int
@@ -139,6 +145,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         experiment_name: str,
         continuous_actions: bool,
         policy_config: dict[str, any],
+        policy_kwargs: dict = None,
         training_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = False,
@@ -148,6 +155,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
             compute_variance,
             continuous_actions,
             policy_config,
+            policy_kwargs,
             training_timesteps,
             log_dir=Path("experiments") / experiment_name / "agent_expectation",
             model_dir=Path("models") / experiment_name / "agent_expectation",
@@ -178,22 +186,24 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         if self.continuous_actions:
             model = SAC(
                 "CnnPolicy",
-                env if "minigrid-discrete" in self.experiment_name else env.env,
+                env.env,
                 verbose=0,
-                **self.policy_config
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
             )
         else:
             model = DQN(
                 "CnnPolicy",
-                env if "minigrid-discrete" in self.experiment_name else env.env,
+                env.env,
                 verbose=0,
-                **self.policy_config
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
             )
 
         callback = CallbackList(
             [
                 TimedEvalCallback(
-                    env if "minigrid-discrete" in self.experiment_name else env.env,
+                    env.env,
                     best_model_save_path=self.model_dir,
                     log_path=self.log_dir,
                     eval_freq=max(10, int(self.training_timesteps / 100)),
@@ -237,6 +247,8 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             soft update coefficient ("Polyak update", between 0 and 1)
         train_freq: int
             number of training steps after which the target network should be updated
+    policy_kwargs : dict
+        additional information for the custom feature extractor that is necessary for small environments to adjust the kernel size of the policy
     training_timesteps : int
             timesteps for embedded SAC/DQN training in the approximated SVI
     T : int
@@ -250,6 +262,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         experiment_name: str,
         continuous_actions: bool,
         policy_config: dict[str, any],
+        policy_kwargs: dict = None,
         training_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = True,
@@ -259,6 +272,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             compute_variance,
             continuous_actions,
             policy_config,
+            policy_kwargs,
             training_timesteps,
             log_dir=Path("experiments") / experiment_name / "agent_variance",
             model_dir=Path("models") / experiment_name / "agent_variance",
@@ -290,22 +304,24 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         if self.continuous_actions:
             model = SAC(
                 "CnnPolicy",
-                env if "minigrid-discrete" in self.experiment_name else env.env,
+                env.env,
                 verbose=0,
-                **self.policy_config
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
             )
         else:
             model = DQN(
                 "CnnPolicy",
-                env if "minigrid-discrete" in self.experiment_name else env.env,
+                env.env,
                 verbose=0,
-                **self.policy_config
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
             )
 
         callback = CallbackList(
             [
                 TimedEvalCallback(
-                    env if "minigrid-discrete" in self.experiment_name else env.env,
+                    env.env,
                     best_model_save_path=self.model_dir,
                     log_path=self.log_dir,
                     eval_freq=max(10, int(self.training_timesteps / 100)),
