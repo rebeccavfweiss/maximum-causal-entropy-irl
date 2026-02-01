@@ -281,7 +281,7 @@ class CrossingMinigridDemonstrator(Demonstrator):
         return pi_s
 
 
-class CarRacingDemonstrator(Demonstrator):
+class ContinuousDemonstrator(Demonstrator):
     """
     Demonstrator in a given Gymnasium environment. Currently this demonstrator will be just trained using stable baselines3 PPO <https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html>.
 
@@ -312,6 +312,7 @@ class CarRacingDemonstrator(Demonstrator):
         n_trajectories: int = 1,
         solver: MDP_solver = None,
         time_steps: int = 1_500_000,
+        policy_kwargs: dict = None,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
@@ -323,11 +324,11 @@ class CarRacingDemonstrator(Demonstrator):
 
         self.log_dir = Path("experiments") / solver.experiment_name / "demonstrator"
 
-        self.policy = self.__train_demonstrator(time_steps)
+        self.policy = self.__train_demonstrator(time_steps, policy_kwargs)
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
-    def __train_demonstrator(self, time_steps: int):
+    def __train_demonstrator(self, time_steps: int, policy_kwargs: dict):
         if os.path.exists(self.model_path):
             wandb.log({"use_pretrained_model": True})
             if self.continuous_actions:
@@ -340,9 +341,17 @@ class CarRacingDemonstrator(Demonstrator):
             wandb.log({"use_pretrained_model": False})
 
             if self.continuous_actions:
-                model = PPO("CnnPolicy", self.env.env, verbose=0)
+                model = PPO(
+                    "CnnPolicy", self.env.env, verbose=0, policy_kwargs=policy_kwargs
+                )
             else:
-                model = DQN("CnnPolicy", self.env.env, verbose=0, buffer_size=250000)
+                model = DQN(
+                    "CnnPolicy",
+                    self.env.env,
+                    verbose=0,
+                    buffer_size=250000,
+                    policy_kwargs=policy_kwargs,
+                )
 
             callback = CallbackList(
                 [
