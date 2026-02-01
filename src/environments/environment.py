@@ -6,7 +6,7 @@ from pathlib import Path
 import utils
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.evaluation import evaluate_policy
-import gym
+import gymnasium as gym
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=4)
@@ -226,9 +226,9 @@ class ContinuousEnvironment(Environment):
         truncated : bool
             if episode was truncated
         """
-        new_state, reward, terminated, truncated = self.env.step(action)
+        new_state, reward, terminated, truncated, info = self.env.step(action)
 
-        return new_state, reward, terminated, truncated
+        return new_state, reward, terminated, truncated, info
 
     @abstractmethod
     def render(self, policy: Policy, T: int = 20, store: bool = False, **kwargs):
@@ -316,12 +316,3 @@ class ContinuousEnvironment(Environment):
     def reset_reward_function(self):
         """Reset to the original vec_env with default rewards."""
         self.env = self._base_env
-
-    def set_max_episode_steps(self, new_steps: int):
-        for env in self.env.envs:
-            base_env = env
-            while isinstance(base_env, gym.Wrapper):
-                if isinstance(base_env, gym.wrappers.TimeLimit):
-                    base_env._max_episode_steps = new_steps
-                    break
-                base_env = base_env.env
