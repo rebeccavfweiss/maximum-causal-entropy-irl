@@ -318,9 +318,9 @@ class ContinuousDemonstrator(Demonstrator):
 
         self.continuous_actions = continuous_actions
         if continuous_actions:
-            self.model_path = Path("models") / solver.experiment_name / "ppo_carracing"
+            self.model_path = Path("models") / solver.experiment_name / "ppo"
         else:
-            self.model_path = Path("models") / solver.experiment_name / "dqn_carracing"
+            self.model_path = Path("models") / solver.experiment_name / "dqn"
 
         self.log_dir = Path("experiments") / solver.experiment_name / "demonstrator"
 
