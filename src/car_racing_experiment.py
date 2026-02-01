@@ -174,7 +174,7 @@ if __name__ == "__main__":
     log_memory("env_config_creation")
 
     # create demonstrator
-    demo = demonstrator.CarRacingDemonstrator(
+    demo = demonstrator.ContinuousDemonstrator(
         env,
         demonstrator_name="CarRacingDemonstrator",
         continuous_actions=continuous_actions,
