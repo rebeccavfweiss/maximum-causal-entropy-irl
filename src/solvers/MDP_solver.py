@@ -55,16 +55,18 @@ class MDPSolver(ABC):
         """
 
         # Selecting a start state according to InitD
-        state = env.reset()
+        state = env.reset()[0]
 
         episode = []
         for t in range(len_episode):
-            if ((env.terminal_states is not None) and (state in env.terminal_states)) or (t == self.T):
+            if (
+                (env.terminal_states is not None) and (state in env.terminal_states)
+            ) or (t == self.T):
                 break
             action = policy.predict(state, t)
-            next_state, reward, done, info = env.step(action)
+            next_state, reward, terminated, truncated, info = env.step(action)
             episode.append((state, action, next_state, reward))
-            if done or utils.is_truncated_from_infos(info):
+            if (terminated or truncated) or utils.is_truncated_from_infos(info):
                 break
             state = next_state
 
@@ -98,7 +100,7 @@ class MDPSolver(ABC):
         if n_trajectories is not None and n_trajectories > 0:
             num_iter = n_trajectories
         else:
-            #use policy directly
+            # use policy directly
             num_iter = 1
 
         mu_avg = None
@@ -110,8 +112,8 @@ class MDPSolver(ABC):
             else:
                 trajectory = self.generate_episode(env, policy, self.T)
 
-            feature_expectation, feature_variance = (
-                self.compute_feature_SVF_bellmann(env, policy, trajectory)
+            feature_expectation, feature_variance = self.compute_feature_SVF_bellmann(
+                env, policy, trajectory
             )
 
             if mu_avg is None:
