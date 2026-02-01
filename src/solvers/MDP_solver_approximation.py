@@ -30,8 +30,8 @@ class MDPSolverApproximation(MDPSolver):
         finite horizon value
     compute_variance : bool
         whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
-    continuous_actions : bool
-        whether the environment has a continuous or discrete action space
+    training_algorithm : str
+        which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
         buffer_size : int
@@ -54,7 +54,7 @@ class MDPSolverApproximation(MDPSolver):
         self,
         T: int,
         compute_variance: bool,
-        continuous_actions: bool,
+        training_algorithm: str,
         policy_config: dict[str, any],
         policy_kwargs: dict = None,
         training_timesteps: int = 10000,
@@ -64,7 +64,7 @@ class MDPSolverApproximation(MDPSolver):
 
         super().__init__(T, compute_variance)
 
-        self.continuous_actions = continuous_actions
+        self.training_algorithm = training_algorithm
         self.policy_config = policy_config
         self.policy_kwargs = policy_kwargs
         self.training_timesteps = training_timesteps
@@ -120,8 +120,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
     ----------
     experiment_name : str
         name for the experiment that will be used in naming logging/storage directories
-    continuous_actions : bool
-        whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    training_algorithm : str
+        which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
         buffer_size : int
@@ -143,7 +143,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
     def __init__(
         self,
         experiment_name: str,
-        continuous_actions: bool,
+        training_algorithm: str,
         policy_config: dict[str, any],
         policy_kwargs: dict = None,
         training_timesteps: int = 10000,
@@ -153,7 +153,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         super().__init__(
             T,
             compute_variance,
-            continuous_actions,
+            training_algorithm,
             policy_config,
             policy_kwargs,
             training_timesteps,
@@ -181,9 +181,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.set_custom_reward_function(lambda s: values["reward"](s.flatten()))
 
-        # TODO make this more elegant
-
-        if self.continuous_actions:
+        if self.training_algorithm == "sac":
             model = SAC(
                 "CnnPolicy",
                 env.env,
@@ -222,7 +220,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.reset_reward_function()
 
-        if self.continuous_actions:
+        if self.training_algorithm:
             # actually return best trained model and not last
             return ModelPolicy(SAC.load(self.model_dir / "best_model"))
         else:
@@ -237,8 +235,8 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
     ----------
     experiment_name : str
         name for the experiment that will be used in naming logging/storage directories
-    continuous_actions : bool
-        whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    training_algorithm : str
+        which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
         buffer_size : int
@@ -260,7 +258,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
     def __init__(
         self,
         experiment_name: str,
-        continuous_actions: bool,
+        training_algorithm: str,
         policy_config: dict[str, any],
         policy_kwargs: dict = None,
         training_timesteps: int = 10000,
@@ -270,7 +268,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         super().__init__(
             T,
             compute_variance,
-            continuous_actions,
+            training_algorithm,
             policy_config,
             policy_kwargs,
             training_timesteps,
@@ -301,7 +299,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             lambda s: values["reward"](s.flatten()) + values["variance"](s.flatten())
         )
 
-        if self.continuous_actions:
+        if self.training_algorithm == "sac":
             model = SAC(
                 "CnnPolicy",
                 env.env,
@@ -340,7 +338,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
 
         env.reset_reward_function()
 
-        if self.continuous_actions:
+        if self.training_algorithm:
             # actually return best trained model and not last
             return ModelPolicy(SAC.load(self.model_dir / "best_model"))
         else:

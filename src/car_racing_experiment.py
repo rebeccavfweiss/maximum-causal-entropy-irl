@@ -120,6 +120,9 @@ if __name__ == "__main__":
         "_continuous" if continuous_actions else "_discrete"
     )
 
+    demo_training_algorithm = "ppo" if continuous_actions else "dqn"
+    agent_training_algorithm = "sac" if continuous_actions else "dqn"
+
     maxiter = 50
     n_trajectories = 150
     training_timesteps = 350000
@@ -177,12 +180,12 @@ if __name__ == "__main__":
     demo = demonstrator.ContinuousDemonstrator(
         env,
         demonstrator_name="CarRacingDemonstrator",
-        continuous_actions=continuous_actions,
+        training_algorithm=demo_training_algorithm,
         T=T,
         n_trajectories=n_trajectories,
         solver=MDPSolverApproximationExpectation(
             experiment_name=experiment_name,
-            continuous_actions=continuous_actions,
+            training_algorithm=demo_training_algorithm,
             T=T,
             compute_variance=True,
             policy_config=policy_config,
@@ -226,7 +229,7 @@ if __name__ == "__main__":
         agent_name="AgentVariance",
         solver=MDPSolverApproximationVariance(
             experiment_name=experiment_name,
-            continuous_actions=continuous_actions,
+            training_algorithm=agent_training_algorithm,
             T=T,
             compute_variance=True,
             policy_config=policy_config,
@@ -271,7 +274,7 @@ if __name__ == "__main__":
         agent_name="AgentExpectation",
         solver=MDPSolverApproximationExpectation(
             experiment_name=experiment_name,
-            continuous_actions=continuous_actions,
+            training_algorithm=agent_training_algorithm,
             T=T,
             compute_variance=False,
             policy_config=policy_config,

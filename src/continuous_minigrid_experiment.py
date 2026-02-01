@@ -92,6 +92,8 @@ if __name__ == "__main__":
     show = False
     store = True
     env_name = "MiniGrid-LavaCrossingS9N1-v0"
+    demo_training_algorithm = "ppo"
+    agent_training_algorithm = "sac"
 
     grid_size = 9
     T = 70
@@ -138,9 +140,10 @@ if __name__ == "__main__":
         demonstrator_name="MinigridDemonstrator",
         T=T,
         n_trajectories=n_trajectories,
+        training_algorithm=demo_training_algorithm,
         solver=MDPSolverApproximationExpectation(
             experiment_name=env_name,
-            continuous_actions=False,
+            training_algorithm=demo_training_algorithm,
             T=T,
             compute_variance=True,
             policy_config=policy_config,
@@ -187,7 +190,7 @@ if __name__ == "__main__":
         agent_name="AgentVariance",
         solver=MDPSolverApproximationVariance(
             experiment_name=env_name,
-            continuous_actions=False,
+            training_algorithm=agent_training_algorithm,
             T=T,
             compute_variance=True,
             policy_config=policy_config,
@@ -230,7 +233,7 @@ if __name__ == "__main__":
         config_default_learner,
         agent_name="AgentExpectation",
         solver=MDPSolverApproximationExpectation(
-            continuous_actions=False,
+            training_algorithm=agent_training_algorithm,
             experiment_name=env_name,
             T=T,
             compute_variance=False,

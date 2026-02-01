@@ -291,8 +291,8 @@ class ContinuousDemonstrator(Demonstrator):
         the environment representing the setting of the problem
     demonstrator_name : str
         name of the demonstrator
-    continuous_actions : bool
-        whether the environment has a continous or action space
+    training_algorithm : str
+        which algorithm should be used to train/load the policy
     T : int
         finite horizon value for the MDP solver
     gamma : float
@@ -307,7 +307,7 @@ class ContinuousDemonstrator(Demonstrator):
         self,
         env: ContinuousEnvironment,
         demonstrator_name: str,
-        continuous_actions: bool = True,
+        training_algorithm: str = "ppo",
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
@@ -316,8 +316,8 @@ class ContinuousDemonstrator(Demonstrator):
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
-        self.continuous_actions = continuous_actions
-        if continuous_actions:
+        self.training_algorithm = training_algorithm
+        if training_algorithm == "ppo":
             self.model_path = Path("models") / solver.experiment_name / "ppo"
         else:
             self.model_path = Path("models") / solver.experiment_name / "dqn"
@@ -331,7 +331,7 @@ class ContinuousDemonstrator(Demonstrator):
     def __train_demonstrator(self, time_steps: int, policy_kwargs: dict):
         if os.path.exists(self.model_path):
             wandb.log({"use_pretrained_model": True})
-            if self.continuous_actions:
+            if self.training_algorithm == "ppo":
                 model = PPO.load(self.model_path / "best_model.zip", env=self.env.env)
             else:
                 model = DQN.load(
@@ -340,7 +340,7 @@ class ContinuousDemonstrator(Demonstrator):
         else:
             wandb.log({"use_pretrained_model": False})
 
-            if self.continuous_actions:
+            if self.training_algorithm == "ppo":
                 model = PPO(
                     "CnnPolicy", self.env.env, verbose=0, policy_kwargs=policy_kwargs
                 )
@@ -376,7 +376,7 @@ class ContinuousDemonstrator(Demonstrator):
             wandb.log_artifact(artifact)
 
             # actually use best model and not last
-            if self.continuous_actions:
+            if self.training_algorithm == "ppo":
                 model = PPO.load(self.model_path / "best_model")
             else:
                 model = DQN.load(self.model_path / "best_model")
