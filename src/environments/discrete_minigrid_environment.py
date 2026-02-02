@@ -59,9 +59,9 @@ class DiscreteMinigridEnvironment(GridEnvironment):
         Initial state description
         """
 
-        state, _ = self.env.reset(self.seed)
+        state, info = self.env.reset(self.seed)
 
-        return state
+        return state, info
 
     def step(self, action: int) -> tuple[any, float, bool, bool]:
         """
@@ -83,9 +83,9 @@ class DiscreteMinigridEnvironment(GridEnvironment):
         truncated : bool
             if episode was truncated
         """
-        new_state, reward, terminated, truncated, _ = self.env.step(action)
+        new_state, reward, terminated, truncated, info = self.env.step(action)
 
-        return new_state, reward, terminated, truncated
+        return new_state, reward, terminated, truncated, info
 
     def render(
         self,
@@ -116,14 +116,14 @@ class DiscreteMinigridEnvironment(GridEnvironment):
         images = []
         terminated = False
         truncated = False
-        state = self.reset()
+        state = self.reset()[0]
         img = self.env.render()
         images.append(img)
         t = 0
         while (not (terminated or truncated)) and t < T:
             # Take the action (index) that have the maximum expected future reward given that state
             action = policy.predict(state, t)
-            state, _, terminated, truncated = self.step(action)
+            state, _, terminated, truncated, _ = self.step(action)
             img = self.env.render()
             images.append(img)
             t += 1
@@ -502,4 +502,6 @@ class CrossingCoordStateWrapper(gym.ObservationWrapper):
             additional information
         """
         state, info = self.env.reset(seed=seed)
+        if seed is None:
+            self.forbidden_states = self.compute_forbidden_states()
         return self.observation(state).get("state_index"), info
