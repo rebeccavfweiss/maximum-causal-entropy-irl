@@ -17,7 +17,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
 def create_minigrid_env(
-    grid_size: int = 9, t: int = 25, env_name: str = "MiniGrid-LavaCrossingS9N1-v0"
+    grid_size: int = 9, T: int = 25, env_name: str = "MiniGrid-DoorKey-5x5-v0"
 ):
 
     config_env = {
@@ -25,7 +25,7 @@ def create_minigrid_env(
         "env_name": env_name,
         "render_mode": "rgb_array",
         "grid_size": grid_size,
-        "seed": randint(1, 100),
+        "seed": None,
         "T": T,
     }
 
@@ -91,11 +91,11 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    env_name = "MiniGrid-LavaCrossingS9N1-v0"
+    env_name = "MiniGrid-DoorKey-5x5-v0"
     demo_training_algorithm = "ppo"
     agent_training_algorithm = "sac"
 
-    grid_size = 9
+    grid_size = 5
     T = 70
 
     maxiter = 50
