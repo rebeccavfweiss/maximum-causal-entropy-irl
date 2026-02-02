@@ -14,6 +14,7 @@ from operator import itemgetter
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from pathlib import Path
+from huggingface_sb3 import load_from_hub
 
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 
@@ -329,16 +330,18 @@ class ContinuousDemonstrator(Demonstrator):
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def __train_demonstrator(self, time_steps: int, policy_kwargs: dict):
-        if os.path.exists(self.model_path):
-            wandb.log({"use_pretrained_model": True})
+        # 2. Existing Local Check / Training Logic
+        if os.path.exists(self.model_path / "best_model.zip"):
+            wandb.log({"use_pretrained_model": True, "source": "local"})
+            # ... your existing loading code ...
+            model_file = self.model_path / "best_model"
             if self.training_algorithm == "ppo":
-                model = PPO.load(self.model_path / "best_model.zip", env=self.env.env)
+                model = PPO.load(model_file, env=self.env.env)
             else:
-                model = DQN.load(
-                    self.model_path / "best_model.zip", device="auto", env=self.env.env
-                )
+                model = DQN.load(model_file, device="auto", env=self.env.env)
         else:
-            wandb.log({"use_pretrained_model": False})
+            # ... your existing training code ...
+            wandb.log({"use_pretrained_model": False, "source": "training"})
 
             if self.training_algorithm == "ppo":
                 model = PPO(
