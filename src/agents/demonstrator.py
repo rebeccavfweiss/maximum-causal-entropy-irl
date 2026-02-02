@@ -14,7 +14,6 @@ from operator import itemgetter
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from pathlib import Path
-from huggingface_sb3 import load_from_hub
 
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 

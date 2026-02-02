@@ -65,9 +65,9 @@ class DynamicMiniGridExtractor(BaseFeaturesExtractor):
         n_input_channels = observation_space.shape[0]
 
         self.cnn = nn.Sequential(
-            nn.Conv2d(n_input_channels, 16, kernel_size=7, stride=1, padding=1),
+            nn.Conv2d(n_input_channels, 16, kernel_size=5, stride=1, padding=1),
             nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=5, stride=1, padding=1),
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Flatten(),
         )
@@ -151,7 +151,7 @@ if __name__ == "__main__":
             training_timesteps=training_timesteps,
         ),
         policy_kwargs=policy_kwargs,
-        time_steps=3_000_000,
+        time_steps=7_500_000,
     )
 
     log_memory("demonstrator_creation")
