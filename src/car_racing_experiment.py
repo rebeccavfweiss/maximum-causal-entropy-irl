@@ -127,7 +127,12 @@ if __name__ == "__main__":
     n_trajectories = 150
     training_timesteps = 350000
     policy_config = dict(
-        buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5, device="auto"
+        policy="CnnPolicy",
+        buffer_size=50000,
+        tau=0.005,
+        gamma=1.0,
+        train_freq=5,
+        device="auto",
     )
     # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
     lap_percent_complete = 0.33
