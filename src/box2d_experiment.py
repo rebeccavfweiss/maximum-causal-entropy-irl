@@ -92,7 +92,7 @@ if __name__ == "__main__":
     learning_rate = lambda step: max(0.975 ** (step + 1), 0.01)
 
     wandb.init(
-        project="mceirl-car-racing",
+        project=f"mceirl-{env_id}",
         name=f"{experiment_name}-iter{maxiter}-sac_iter{training_timesteps}-T{T}-traj{n_trajectories}",
         config={
             "maxiter": maxiter,
