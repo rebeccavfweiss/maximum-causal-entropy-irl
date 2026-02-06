@@ -201,8 +201,11 @@ class ContinuousEnvironment(Environment):
         -------
         Initial state description
         """
+        if isinstance(self.env, VecEnv):
 
-        state = self.env.reset()
+            state = self.env.reset()
+        else:
+            state, _ = self.env.reset()
 
         return state
 
@@ -228,11 +231,12 @@ class ContinuousEnvironment(Environment):
         """
 
         if isinstance(self.env, VecEnv):
-            new_state, reward, terminated, truncated = self.env.step(action)
+            new_state, reward, done, info = self.env.step(action)
         else:
-            new_state, reward, terminated, truncated, _ = self.env.step(action)
+            new_state, reward, terminated, truncated, info = self.env.step(action)
+            done = truncated or terminated
 
-        return new_state, reward, terminated, truncated
+        return new_state, reward, done, info
 
     @abstractmethod
     def render(self, policy: Policy, T: int = 20, store: bool = False, **kwargs):
