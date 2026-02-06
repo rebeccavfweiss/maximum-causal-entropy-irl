@@ -162,7 +162,7 @@ if __name__ == "__main__":
     # clean up
     del demo.policy
     log_memory("demonstrator_policy_cleanup")
-    exit(0)
+
     # create agent that also matches variances
     agent_variance = learner.ApproximateLearner(
         env,
