@@ -226,9 +226,13 @@ class ContinuousEnvironment(Environment):
         truncated : bool
             if episode was truncated
         """
-        new_state, reward, terminated, truncated, info = self.env.step(action)
 
-        return new_state, reward, terminated, truncated, info
+        if isinstance(self.env, VecEnv):
+            new_state, reward, terminated, truncated = self.env.step(action)
+        else:
+            new_state, reward, terminated, truncated, _ = self.env.step(action)
+
+        return new_state, reward, terminated, truncated
 
     @abstractmethod
     def render(self, policy: Policy, T: int = 20, store: bool = False, **kwargs):
