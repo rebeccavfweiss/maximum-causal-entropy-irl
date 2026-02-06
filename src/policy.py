@@ -2,13 +2,15 @@ from abc import ABC, abstractmethod
 import numpy as np
 from stable_baselines3 import PPO
 
+
 class Policy(ABC):
     """
     Wrapper class for differnt kinds of policies to offer the same interface to other parts of the algorithm no matter what the policy looks like.
 
     """
+
     @abstractmethod
-    def predict(obs, t:int=None) -> int:
+    def predict(obs, t: int = None) -> int:
         pass
 
 
@@ -22,10 +24,10 @@ class TabularPolicy(Policy):
         tabluar policy to use
     """
 
-    def __init__(self, pi:np.ndarray):
+    def __init__(self, pi: np.ndarray):
         self.pi = pi
 
-    def predict(self, obs, t:int=None) -> int:
+    def predict(self, obs, t: int = None) -> int:
         """
         Predicts an action given an observation in the environment
 
@@ -46,7 +48,8 @@ class TabularPolicy(Policy):
         action = int(np.random.choice(np.arange(len(probs)), p=probs))
 
         return action
-    
+
+
 class ModelPolicy(Policy):
     """
     Specific implementation of the Policy interface to use a model for the policy, e.g., Neural networks trained with PPO
@@ -56,10 +59,11 @@ class ModelPolicy(Policy):
     model : PPO
         model to use for prediction
     """
-    def __init__(self, model : PPO):
+
+    def __init__(self, model: PPO):
         self.model = model
 
-    def predict(self, obs, t:int=None) -> int:
+    def predict(self, obs, t: int = None) -> int:
         """
         Predicts an action given an observation in the environment
 
