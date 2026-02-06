@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from environments.environment import Environment
 from policy import Policy
 import utils
+from stable_baselines3.common.vec_env import VecEnv
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
@@ -55,7 +56,7 @@ class MDPSolver(ABC):
         """
 
         # Selecting a start state according to InitD
-        state = env.reset()[0]
+        state = env.reset()
 
         episode = []
         for t in range(len_episode):
@@ -64,9 +65,10 @@ class MDPSolver(ABC):
             ) or (t == self.T):
                 break
             action = policy.predict(state, t)
-            next_state, reward, terminated, truncated, info = env.step(action)
+
+            next_state, reward, terminated, truncated = env.step(action)
             episode.append((state, action, next_state, reward))
-            if (terminated or truncated) or utils.is_truncated_from_infos(info):
+            if terminated or truncated:  # or utils.is_truncated_from_infos(info):
                 break
             state = next_state
 
