@@ -153,3 +153,18 @@ class VecCustomRewardWrapper(VecEnvWrapper):
             [self.custom_reward_fn(next_obs[i]) for i in range(len(rewards))]
         )
         return next_obs, custom_rewards, dones, info
+
+
+class FixObservationSpace(gym.ObservationWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        # Manually override the observation space to match the model's expected Box(-inf, inf)
+        self.observation_space = gym.spaces.Box(
+            low=-float("inf"),
+            high=float("inf"),
+            shape=(24,),
+            dtype=env.observation_space.dtype,
+        )
+
+    def observation(self, observation):
+        return super().observation(observation)

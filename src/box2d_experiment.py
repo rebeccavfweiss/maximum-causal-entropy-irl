@@ -58,11 +58,17 @@ if __name__ == "__main__":
     show = False
     store = True
     continuous = False
-    env_id = "LunarLander-v3"
-    experiment_name = "lunarlander" + ("_continuous" if continuous else "_discrete")
+    # env_id = "LunarLander-v3"
+    env_id = "BipedalWalker-v3"
+
+    experiment_name = env_id + ("_continuous" if continuous else "_discrete")
+    if env_id == "LunarLander-v3":
+        repo_id = "Chiz"
+    else:
+        repo_id = "matamaki"
 
     demo_training_algorithm = "ppo"
-    agent_training_algorithm = "dqn"
+    agent_training_algorithm = "sac" if continuous else "dqn"
 
     maxiter = 50
     n_trajectories = 150
@@ -81,7 +87,7 @@ if __name__ == "__main__":
         device="auto",
     )
 
-    T = 800
+    T = 800 if env_id == "LunarLander-v3" else 300
 
     learning_rate = lambda step: max(0.975 ** (step + 1), 0.01)
 
@@ -103,6 +109,7 @@ if __name__ == "__main__":
 
     # create the environment
     env = create_box2d_env(
+        env_id=env_id,
         T=T,
         gamma=demo_policy_config["gamma"],
     )
@@ -127,7 +134,7 @@ if __name__ == "__main__":
             policy_config=demo_policy_config,
             training_timesteps=training_timesteps,
         ),
-        hugging_face_repo="ghadanoor",
+        hugging_face_repo=repo_id,
     )
 
     log_memory("demonstrator_creation")
@@ -155,7 +162,7 @@ if __name__ == "__main__":
     # clean up
     del demo.policy
     log_memory("demonstrator_policy_cleanup")
-
+    exit(0)
     # create agent that also matches variances
     agent_variance = learner.ApproximateLearner(
         env,
