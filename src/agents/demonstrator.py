@@ -14,6 +14,7 @@ from operator import itemgetter
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from pathlib import Path
+from huggingface_sb3 import load_from_hub
 
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 
@@ -313,6 +314,7 @@ class ContinuousDemonstrator(Demonstrator):
         solver: MDP_solver = None,
         time_steps: int = 1_500_000,
         policy_kwargs: dict = None,
+        hugging_face_repo: str = None,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
@@ -324,11 +326,35 @@ class ContinuousDemonstrator(Demonstrator):
 
         self.log_dir = Path("experiments") / solver.experiment_name / "demonstrator"
 
+        self.repo_id = hugging_face_repo
+
         self.policy = self.__train_demonstrator(time_steps, policy_kwargs)
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
     def __train_demonstrator(self, time_steps: int, policy_kwargs: dict):
+
+        if not (self.repo_id is None):
+            repo_id = f"{self.repo_id}/{self.training_algorithm}-{self.env.env_id}"
+            filename = f"{self.training_algorithm}-{self.env.env_id}.zip"
+
+            try:
+                print(f"Attempting to load pretrained model from RL Zoo: {repo_id}...")
+                checkpoint = load_from_hub(repo_id=repo_id, filename=filename)
+
+                if self.training_algorithm == "ppo":
+                    model = PPO.load(checkpoint, env=self.env.env)
+                else:
+                    model = DQN.load(checkpoint, env=self.env.env)
+
+                print(f"Successfully loaded {repo_id} from RL Zoo.")
+                wandb.log({"source": "rl_zoo"})
+                return ModelPolicy(model)
+
+            except Exception as e:
+                print(
+                    f"RL Zoo model not found or error occurred: {e}. Falling back to local logic."
+                )
         # 2. Existing Local Check / Training Logic
         if os.path.exists(self.model_path / "best_model.zip"):
             wandb.log({"use_pretrained_model": True, "source": "local"})
@@ -344,11 +370,11 @@ class ContinuousDemonstrator(Demonstrator):
 
             if self.training_algorithm == "ppo":
                 model = PPO(
-                    "CnnPolicy", self.env.env, verbose=0, policy_kwargs=policy_kwargs
+                    "MlpPolicy", self.env.env, verbose=0, policy_kwargs=policy_kwargs
                 )
             else:
                 model = DQN(
-                    "CnnPolicy",
+                    "MlpPolicy",
                     self.env.env,
                     verbose=0,
                     buffer_size=250000,
