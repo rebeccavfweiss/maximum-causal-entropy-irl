@@ -183,16 +183,14 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         if self.training_algorithm == "sac":
             model = SAC(
-                "CnnPolicy",
-                env.env,
+                env=env.env,
                 verbose=0,
                 **self.policy_config,
                 policy_kwargs=self.policy_kwargs
             )
         else:
             model = DQN(
-                "CnnPolicy",
-                env.env,
+                env=env.env,
                 verbose=0,
                 **self.policy_config,
                 policy_kwargs=self.policy_kwargs
@@ -220,7 +218,7 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.reset_reward_function()
 
-        if self.training_algorithm:
+        if self.training_algorithm == "sac":
             # actually return best trained model and not last
             return ModelPolicy(SAC.load(self.model_dir / "best_model"))
         else:
@@ -239,6 +237,8 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
+        policy_type: str
+            what policy to use
         buffer_size : int
             buffer size for embedded SAC/DQN training in the approximated SVI
         tau : float
@@ -301,16 +301,14 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
 
         if self.training_algorithm == "sac":
             model = SAC(
-                "CnnPolicy",
-                env.env,
+                env=env.env,
                 verbose=0,
                 **self.policy_config,
                 policy_kwargs=self.policy_kwargs
             )
         else:
             model = DQN(
-                "CnnPolicy",
-                env.env,
+                env=env.env,
                 verbose=0,
                 **self.policy_config,
                 policy_kwargs=self.policy_kwargs
@@ -338,7 +336,7 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
 
         env.reset_reward_function()
 
-        if self.training_algorithm:
+        if self.training_algorithm == "sac":
             # actually return best trained model and not last
             return ModelPolicy(SAC.load(self.model_dir / "best_model"))
         else:
