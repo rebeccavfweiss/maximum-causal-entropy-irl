@@ -1,15 +1,21 @@
 import MDP_solver
 from MDP_solver_exact import MDPSolverExact, MDPSolverExactVariance
-from MDP_solver_approximation import MDPSolverApproximation, MDPSolverApproximationVariance
+from MDP_solver_approximation import (
+    MDPSolverApproximation,
+    MDPSolverApproximationVariance,
+)
 import numpy as np
 import wandb
 from environments.environment import Environment, GridEnvironment
 from environments.car_racing_environment import CarRacingEnvironment
+from environments.object_world_environment import ObjectWorldEnvironment
 from policy import Policy
 from agents.agent import Agent
 from time import time
 import torch
 from abc import abstractmethod
+from pathlib import Path
+
 _largenum = 1000000
 
 
@@ -44,9 +50,9 @@ class Learner(Agent):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDP_solver.MDPSolver,
-        learning_rate = None
+        learning_rate=None,
     ):
-        
+
         super().__init__(env, agent_name)
         self.mu_demonstrator = mu_demonstrator
         self.theta_e = np.zeros(self.env.n_features)
@@ -84,7 +90,6 @@ class Learner(Agent):
             identifier number for figure
         """
 
-        #TODO rethink this function how to extract the thing common to all learners and env and what to put elsewhere
         self.policy = self.compute_policy()
 
         self.V = self.solver.compute_value_function_bellmann_averaged(
@@ -93,11 +98,16 @@ class Learner(Agent):
             dict(reward=self.env.reward),
         )  # compute the value function w.r.t to true reward parameters
 
-
         path_to_file = self.render(show, store, fignum)
         if path_to_file is not None:
-            #log a video to see how the current policy is doing
-            wandb.log({f"final/video_{self.agent_name}": wandb.Video(path_to_file, fps=4, format="mp4")})
+            # log a video to see how the current policy is doing
+            wandb.log(
+                {
+                    f"final/video_{self.agent_name}": wandb.Video(
+                        path_to_file, fps=4, format="mp4"
+                    )
+                }
+            )
 
     def compute_policy(self) -> Policy:
         """
@@ -120,7 +130,7 @@ class Learner(Agent):
 
     @abstractmethod
     def get_variance(self) -> any:
-       pass
+        pass
 
     def get_mu_soft(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -132,7 +142,9 @@ class Learner(Agent):
         """
         self.policy = self.compute_policy()
 
-        return self.solver.compute_feature_SVF_bellmann_averaged(self.env, self.policy, self.n_trajectories)
+        return self.solver.compute_feature_SVF_bellmann_averaged(
+            self.env, self.policy, self.n_trajectories
+        )
 
     def batch_MCE(self) -> tuple[int, list[float]]:
         """
@@ -148,8 +160,9 @@ class Learner(Agent):
             time used per iteration
         """
 
-        calc_theta_v = (isinstance(self.solver, MDPSolverExactVariance) or 
-                        isinstance(self.solver, MDPSolverApproximationVariance))
+        calc_theta_v = isinstance(self.solver, MDPSolverExactVariance) or isinstance(
+            self.solver, MDPSolverApproximationVariance
+        )
         runtime = []
 
         initial_lr = 1.0
@@ -177,6 +190,14 @@ class Learner(Agent):
                 optimizer_v, lr_lambda=lr_lambda
             )
 
+        if isinstance(self.env, ObjectWorldEnvironment):
+            # for object world track reward evolution
+            self.rewards = []
+            current_rewards = self.env.get_reward_for_given_theta(self.theta_e)
+            if calc_theta_v:
+                current_rewards += self.env.get_variance_for_given_theta(self.theta_v)
+            self.rewards.append(current_rewards)
+
         t = 1
         while True:
             start = time()
@@ -189,12 +210,22 @@ class Learner(Agent):
             # Recompute agent feature expectations
             mu_reward_agent, mu_variance_agent = self.get_mu_soft()
 
-            if (t%10 - 1) == 0 and isinstance(self.solver, MDPSolverApproximation) and isinstance(self.env, CarRacingEnvironment):
+            if (
+                (t % 10 - 1) == 0
+                and isinstance(self.solver, MDPSolverApproximation)
+                and isinstance(self.env, CarRacingEnvironment)
+            ):
                 # evaluate agent with a recorded episode
                 path_to_file = self.render(False, True)
                 if path_to_file is not None:
-                    #log a video to see how the current policy is doing
-                    wandb.log({f"eval/video_{self.agent_name}": wandb.Video(path_to_file, fps=4, format="mp4")})
+                    # log a video to see how the current policy is doing
+                    wandb.log(
+                        {
+                            f"eval/video_{self.agent_name}": wandb.Video(
+                                path_to_file, fps=4, format="mp4"
+                            )
+                        }
+                    )
 
             # Compute gradient for reward part
             grad_e = torch.tensor(
@@ -230,14 +261,34 @@ class Learner(Agent):
             if calc_theta_v:
                 theta_v_diff = torch.norm(theta_v.grad).item()
 
+            wandb.log(
+                {
+                    f"step_{self.agent_name}": t,
+                    f"theta_e_diff_{self.agent_name}": theta_e_diff,
+                    f"lr_e_{self.agent_name}": scheduler_e.get_last_lr()[0],
+                    f"grad_norm_theta_e_{self.agent_name}": torch.norm(
+                        theta_e.grad
+                    ).item(),
+                    **(
+                        {
+                            f"theta_v_diff_{self.agent_name}": theta_v_diff,
+                            f"grad_norm_theta_v_{self.agent_name}": torch.norm(
+                                theta_v.grad
+                            ).item(),
+                        }
+                        if calc_theta_v
+                        else {}
+                    ),
+                }
+            )
 
-            wandb.log({
-                f"step_{self.agent_name}": t,
-                f"theta_e_diff_{self.agent_name}": theta_e_diff,
-                f"lr_e_{self.agent_name}": scheduler_e.get_last_lr()[0],
-                f"grad_norm_theta_e_{self.agent_name}": torch.norm(theta_e.grad).item(),
-                **({f"theta_v_diff_{self.agent_name}": theta_v_diff, f"grad_norm_theta_v_{self.agent_name}": torch.norm(theta_v.grad).item()} if calc_theta_v else {})
-            })
+            if isinstance(self.env, ObjectWorldEnvironment):
+                current_rewards = self.env.get_reward_for_given_theta(self.theta_e)
+                if calc_theta_v:
+                    current_rewards += self.env.get_variance_for_given_theta(
+                        self.theta_v
+                    )
+                self.rewards.append(current_rewards)
 
             if theta_e_diff < self.tol_exp and (
                 not calc_theta_v or theta_v_diff < self.tol_var
@@ -256,7 +307,8 @@ class Learner(Agent):
             self.theta_v = theta_v.detach().numpy()
 
         return t, runtime
-    
+
+
 class TabularLearner(Learner):
     """
     Implementing an agent using either expectation matching / expectation and variance matching to solve an IRL problem.
@@ -288,10 +340,12 @@ class TabularLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverExact,
-        learning_rate = None
+        learning_rate=None,
     ):
 
-        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver, learning_rate)
+        super().__init__(
+            env, mu_demonstrator, config_agent, agent_name, solver, learning_rate
+        )
 
     def get_linear_reward(self) -> np.ndarray:
         """
@@ -314,7 +368,34 @@ class TabularLearner(Learner):
         """
 
         return self.env.get_variance_for_given_theta(self.theta_v)
-    
+
+    def render(self, show: bool = False, store: bool = False, fignum: int = 0) -> Path:
+        """
+        Overwrite base rendering function in case we have an object world environment to include the reward evolution
+
+        Parameters
+        ----------
+        show : bool
+            whether or not the plot should be shown
+        store : bool
+            whether or not the plot should be stored
+        fignum : int
+            identifier number for the figure
+
+        Returns
+        -------
+        path : Path
+            path to the stored video (for the car racing environment) and None else
+        """
+        if isinstance(self.env, ObjectWorldEnvironment):
+            return self.env.render(
+                self.rewards, self.V, self.policy, self.agent_name, store, show
+            )
+
+        else:
+            return super().render(show, store, fignum)
+
+
 class ApproximateLearner(Learner):
     """
     Implementing an agent using either expectation matching / expectation and variance matching to solve an IRL problem.
@@ -350,23 +431,29 @@ class ApproximateLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverApproximation,
-        learning_rate = None,
+        learning_rate=None,
         heuristic_theta_e: np.ndarray = None,
-        heuristic_theta_v: np.ndarray = None
+        heuristic_theta_v: np.ndarray = None,
     ):
-        
-        super().__init__(env, mu_demonstrator, config_agent, agent_name, solver, learning_rate)
+
+        super().__init__(
+            env, mu_demonstrator, config_agent, agent_name, solver, learning_rate
+        )
 
         if heuristic_theta_e is not None:
-            assert heuristic_theta_e.shape[0] == self.env.n_features, f"heuristic for theta_e has wrong dimension(s), expected {self.env.n_features} got {heuristic_theta_e.shape}"
+            assert (
+                heuristic_theta_e.shape[0] == self.env.n_features
+            ), f"heuristic for theta_e has wrong dimension(s), expected {self.env.n_features} got {heuristic_theta_e.shape}"
 
             self.theta_e = heuristic_theta_e
-        
+
         if heuristic_theta_v is not None:
-            assert heuristic_theta_v.shape == (self.env.n_features, self.env.n_features), f"heuristic for theta_v has wrong dimension(s), expexted {(self.env.n_features, self.env.n_features)} got {heuristic_theta_v.shape}"
+            assert heuristic_theta_v.shape == (
+                self.env.n_features,
+                self.env.n_features,
+            ), f"heuristic for theta_v has wrong dimension(s), expexted {(self.env.n_features, self.env.n_features)} got {heuristic_theta_v.shape}"
 
             self.theta_v = heuristic_theta_v
-
 
     def get_linear_reward(self) -> any:
         """
