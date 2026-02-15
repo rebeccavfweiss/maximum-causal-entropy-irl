@@ -402,34 +402,46 @@ class ObjectWorldEnvironment(GridEnvironment):
             plt.close()
 
         if len(rewards) > 1:
-            figure = plt.figure(f + 1)
-            ax = plt.subplot()
+            if show or store:
+                figure = plt.figure(f + 1)
+                ax = plt.subplot()
 
-            def AnimationFunction(frame):
-                if frame % 10 == 0:
-                    print(f"Rendering frame {10*frame}/{len(rewards)}...", end="\r")
+                def AnimationFunction(frame, skip_factor):
+                    if frame % 10 == 0:
+                        print(
+                            f"Rendering frame {skip_factor*frame}/{len(rewards)}...",
+                            end="\r",
+                        )
 
-                ax.pcolor(
-                    rewards[int(10 * frame)].reshape(self.grid_size, self.grid_size)
+                    ax.pcolor(
+                        rewards[skip_factor * frame].reshape(
+                            self.grid_size, self.grid_size
+                        ),
+                    )
+
+                skip_factor = max(1, int(len(rewards) / 50))
+                anim_created = FuncAnimation(
+                    figure,
+                    lambda frame: AnimationFunction(frame, skip_factor),
+                    frames=int(len(rewards) / skip_factor),
+                    interval=25,
                 )
 
-            anim_created = FuncAnimation(
-                figure, AnimationFunction, frames=int(len(rewards) / 10), interval=25
-            )
+                if show:
+                    video = anim_created.to_html5_video()
+                    html = display.HTML(video)
+                    display.display(html)
 
-            if show:
-                video = anim_created.to_html5_video()
-                html = display.HTML(video)
-                display.display(html)
+                if store:
+                    writer = FFMpegWriter(
+                        fps=30, metadata=dict(artist="Me"), bitrate=1800
+                    )
+                    anim_created.save(
+                        Path("recordings") / "object_world" / f"rewards_{strname}.mp4",
+                        writer=writer,
+                    )
 
-            if store:
-                writer = FFMpegWriter(fps=30, metadata=dict(artist="Me"), bitrate=1800)
-                anim_created.save(
-                    Path("recordings") / "object_world" / f"rewards_{strname}.mp4",
-                    writer=writer,
-                )
-
-            plt.close()
+                plt.close()
 
     def __get_next_states(self, state: int, possible_actions: np.ndarray) -> np.ndarray:
         """
