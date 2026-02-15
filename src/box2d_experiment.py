@@ -30,10 +30,10 @@ def create_box2d_env(
     return env
 
 
-def create_config_learner(n_trajectories: int = 1, maxiter: int = 3):
+def create_config_learner(n_trajectories: int = 1, maxiter: int = 500):
     config_default_learner = {
-        "tol_exp": 5.0,
-        "tol_var": 250.0,
+        "tol_exp": 0.0005,
+        "tol_var": 0.0125,
         "miniter": 1,
         "maxiter": maxiter,
         "n_trajectories": n_trajectories,
@@ -58,8 +58,8 @@ if __name__ == "__main__":
     show = False
     store = True
     continuous = False
-    # env_id = "LunarLander-v3"
-    env_id = "BipedalWalker-v3"
+    env_id = "LunarLander-v3"
+    # env_id = "BipedalWalker-v3"
 
     experiment_name = env_id + ("_continuous" if continuous else "_discrete")
     if env_id == "LunarLander-v3":
@@ -70,9 +70,9 @@ if __name__ == "__main__":
     demo_training_algorithm = "ppo"
     agent_training_algorithm = "sac" if continuous else "dqn"
 
-    maxiter = 50
-    n_trajectories = 150
-    training_timesteps = 350000
+    maxiter = 500
+    n_trajectories = 500
+    training_timesteps = 500_000
     demo_policy_config = dict(
         activation_fn=torch.nn.ReLU,
         net_arch=[256, 256],
