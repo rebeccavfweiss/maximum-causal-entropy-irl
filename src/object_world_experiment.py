@@ -8,9 +8,17 @@ from multiprocessing import Pool
 import wandb
 import matplotlib.pylab as plt
 from pathlib import Path
+from torch.optim.lr_scheduler import LambdaLR
+from torch.optim import Adam, RMSprop, SGD
 
 
-def create_objectworld_env(T: int = 50):
+def create_objectworld_env(
+    gamma: float = 1.0,
+    grid_size: int = 10,
+    T: int = 50,
+    random_start: bool = False,
+    continuous: bool = False,
+):
 
     config_env = {
         "theta": [
@@ -18,11 +26,12 @@ def create_objectworld_env(T: int = 50):
             1.0,
             -2.0,
         ],  # just any thing because the base class needs this variable, not used here
-        "gamma": 1.0,
-        "grid_size": 10,
-        "random_start": False,
-        "continuous": False,
+        "gamma": gamma,
+        "grid_size": grid_size,
+        "random_start": random_start,
+        "continuous": continuous,
         "T": T,
+        "n_objects": int(2 * grid_size),
     }
 
     env = ObjectWorldEnvironment(config_env)
@@ -32,10 +41,10 @@ def create_objectworld_env(T: int = 50):
 
 def create_config_learner():
     config_default_learner = {
-        "tol_exp": 0.0005,
-        "tol_var": 0.0025,
+        "tol_exp": 0.005,
+        "tol_var": 0.5,
         "miniter": 1,
-        "maxiter": 5000,
+        "maxiter": 6000,
     }
 
     return config_default_learner
@@ -45,17 +54,60 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    n_trajectories = 50
+    n_trajectories = 100
     experiment_name = "object-world"
-    T = 50
+    T = 20
+    grid_size = 6
+    gamma = 1.0
+    random_start = False
+    continuous = False
+    config_default_learner = create_config_learner()
+    learning_rate = {
+        "scheduler": LambdaLR,
+        "scheduler_kwargs": {
+            "lr_lambda": lambda step: max(0.95 ** np.log(step + 1), 0.0005 / 0.99)
+        },
+    }
+    learning_rate_e = {
+        "scheduler": LambdaLR,
+        "scheduler_kwargs": {
+            "lr_lambda": lambda step: (max(0.9 ** np.log(step + 1), 0.001))
+        },
+    }
+    learning_rate_v = {
+        "scheduler": LambdaLR,
+        "scheduler_kwargs": {
+            "lr_lambda": lambda step: (max(0.82 ** np.log(step + 1), 0.001))
+        },
+    }
+    optimizer_e = Adam
+    optimizer_v = Adam
+    optimizer_e_kwargs = {"lr": 0.1}
+    optimizer_v_kwargs = {"lr": 0.075, "eps": 1e-7, "weight_decay": 0.005}
+    alternate_every = 50
+    var_factor = 5
 
     wandb.init(
         project=f"mceirl-{experiment_name}",
-        name=f"{experiment_name}-run_0",
-        config={"T": T},
+        name=f"{experiment_name}-g{grid_size}"
+        + ("-random" if random_start else "")
+        + ("-cont_features" if continuous else "-discrete_features"),
+        config={
+            "T": T,
+            "grid_size": grid_size,
+            "random_start": random_start,
+            "continuous": continuous,
+            "alternate_every": alternate_every,
+        },
     )
 
-    env = create_objectworld_env(T=T)
+    env = create_objectworld_env(
+        gamma=gamma,
+        T=T,
+        grid_size=grid_size,
+        random_start=random_start,
+        continuous=continuous,
+    )
     config_default_learner = create_config_learner()
 
     fig = plt.figure()
@@ -77,7 +129,6 @@ if __name__ == "__main__":
         T=T,
     )
 
-    demo.render(show, store, 1)
     reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)
 
     wandb.log(
@@ -96,6 +147,9 @@ if __name__ == "__main__":
         config_default_learner,
         agent_name="AgentExpectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
+        learning_rate_e=learning_rate,
+        optimizer_e=optimizer_e,
+        optimizer_e_kwargs=optimizer_e_kwargs,
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
     agent_expectation.compute_and_draw(show, store, 4)
@@ -119,8 +173,16 @@ if __name__ == "__main__":
         config_default_learner,
         agent_name="AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
+        learning_rate_e=learning_rate_e,
+        learning_rate_v=learning_rate_v,
+        optimizer_e=optimizer_e,
+        optimizer_v=optimizer_v,
+        optimizer_e_kwargs=optimizer_e_kwargs,
+        optimizer_v_kwargs=optimizer_v_kwargs,
     )
-    iter_variance, time_variance = agent_variance.batch_MCE()
+    iter_variance, time_variance = agent_variance.batch_MCE(
+        alternate_every=alternate_every, var_factor=var_factor
+    )
     agent_variance.compute_and_draw(show, store, 7)
     reward_variance = env.compute_true_reward_for_agent(
         agent_variance, n_trajectories, T
