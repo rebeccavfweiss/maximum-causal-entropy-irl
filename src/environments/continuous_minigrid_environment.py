@@ -69,16 +69,15 @@ class ContinuousMinigridEnvironment(ContinuousEnvironment):
         dir = Path("recordings") / "cont_minigrid" / self.env_name
         dir.mkdir(parents=True, exist_ok=True)
         images = []
-        terminated = False
-        truncated = False
-        state = self.reset()[0]
+        done=False
+        state = self.reset()
         img = self.env.render()
         images.append(img)
         t = 0
-        while (not (terminated or truncated)) and t < T:
+        while (not done) and t < T:
             # Take the action (index) that have the maximum expected future reward given that state
             action = policy.predict(state, t)
-            state, _, terminated, truncated, _ = self.step(action)
+            state, _, done, _ = self.step(action)
             img = self.env.render()
             images.append(img)
             t += 1
