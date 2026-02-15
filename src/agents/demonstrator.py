@@ -343,7 +343,7 @@ class ContinuousDemonstrator(Demonstrator):
                 checkpoint = load_from_hub(repo_id=repo_id, filename=filename)
 
                 if self.training_algorithm == "ppo":
-                    model = PPO.load(checkpoint, env=self.env.env)
+                    model = PPO.load(checkpoint, env=self.env.env, device="cpu")
                 else:
                     model = DQN.load(checkpoint, env=self.env.env)
 
