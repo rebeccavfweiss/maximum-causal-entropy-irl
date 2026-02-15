@@ -13,6 +13,7 @@ from policy import Policy
 from agents.agent import Agent
 from time import time
 import torch
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from abc import abstractmethod
 from pathlib import Path
 
@@ -39,8 +40,18 @@ class Learner(Agent):
         name of the agent
     solver : MDPSolver.MDPSolver
         solver to use (either only expectation matching or also variance matching)
-    learning_rate
-        custom learning rate function for MCE IRL
+    learning_rate_e
+        custom learning rate function for MCE IRL for theta_e
+    learning_rate_v
+        custom learning rate function for MCE IRL for theta_v
+    optimizer_e:
+        optimizer to use during the dual ascent for theta_e
+    optimizer_v:
+        optimizer to use during the dual acent for theta_v
+    optimizer_e_kwargs:
+        keyed arguments to use for the optimizer of theta_e
+    optimizer_v_kwargs:
+        keyed arguments to use for the optimizer of theta_v
     """
 
     def __init__(
@@ -50,7 +61,12 @@ class Learner(Agent):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDP_solver.MDPSolver,
-        learning_rate=None,
+        learning_rate_e=None,
+        learning_rate_v=None,
+        optimizer_e=None,
+        optimizer_v=None,
+        optimizer_e_kwargs=None,
+        optimizer_v_kwargs=None,
     ):
 
         super().__init__(env, agent_name)
@@ -64,7 +80,14 @@ class Learner(Agent):
         self.miniter = config_agent["miniter"]
         self.n_trajectories = config_agent.get("n_trajectories", None)
 
-        self.learning_rate = learning_rate
+        self.learning_rate_e = learning_rate_e
+        self.learning_rate_v = learning_rate_v
+
+        self.optimizer_e = optimizer_e
+        self.optimizer_v = optimizer_v
+
+        self.optimizer_e_kwargs = optimizer_e_kwargs
+        self.optimizer_v_kwargs = optimizer_v_kwargs
 
         self.theta_upperBound = _largenum
 
@@ -146,7 +169,9 @@ class Learner(Agent):
             self.env, self.policy, self.n_trajectories
         )
 
-    def batch_MCE(self) -> tuple[int, list[float]]:
+    def batch_MCE(
+        self, alternate_every: int = None, var_factor: int = 2
+    ) -> tuple[int, list[float]]:
         """
         implementation of Algorithm 1
 
@@ -165,30 +190,48 @@ class Learner(Agent):
         )
         runtime = []
 
-        initial_lr = 1.0
-        min_lr = 0.01
+        min_lr = 0.001
         gamma = 0.99
+        theta_e_diff = np.inf
+        theta_v_diff = np.inf
 
         # Initialize PyTorch tensors for thetas
         theta_e = torch.zeros(self.env.n_features, requires_grad=True)
-        optimizer_e = torch.optim.Adam([theta_e], lr=initial_lr)
-        if self.learning_rate is None:
-            lr_lambda = lambda step: max(gamma ** np.log(step + 1), min_lr / initial_lr)
+        if self.optimizer_e is None:
+            optimizer_e = torch.optim.Adam([theta_e], lr=1.0)
         else:
-            lr_lambda = self.learning_rate
-        scheduler_e = torch.optim.lr_scheduler.LambdaLR(
-            optimizer_e, lr_lambda=lr_lambda
-        )
+            optimizer_e = self.optimizer_e([theta_e], **self.optimizer_e_kwargs)
+        if self.learning_rate_e is None:
+            lr_lambda_e = lambda step: max(gamma ** np.log(step + 1), min_lr / 1.0)
+
+            scheduler_e = torch.optim.lr_scheduler.LambdaLR(
+                optimizer_e, lr_lambda=lr_lambda_e
+            )
+        else:
+
+            scheduler_e = self.learning_rate_e["scheduler"](
+                optimizer_e, **self.learning_rate_e["scheduler_kwargs"]
+            )
 
         if calc_theta_v:
             theta_v = torch.zeros(
                 (self.env.n_features, self.env.n_features), requires_grad=True
             )
-            optimizer_v = torch.optim.Adam([theta_v], lr=initial_lr)
-            lr_lambda = lambda step: max(gamma ** np.log(step + 1), min_lr / initial_lr)
-            scheduler_v = torch.optim.lr_scheduler.LambdaLR(
-                optimizer_v, lr_lambda=lr_lambda
-            )
+            if optimizer_e is None:
+                optimizer_v = torch.optim.Adam([theta_v], lr=1.0, eps=1e-7)
+            else:
+                optimizer_v = self.optimizer_v([theta_v], **self.optimizer_v_kwargs)
+            if self.learning_rate_v is None:
+                lr_lambda_v = lambda step: max(gamma ** np.log(step + 1), min_lr / 1.0)
+
+                scheduler_v = torch.optim.lr_scheduler.LambdaLR(
+                    optimizer_v, lr_lambda=lr_lambda_v
+                )
+            else:
+
+                scheduler_v = self.learning_rate_v["scheduler"](
+                    optimizer_v, **self.learning_rate_v["scheduler_kwargs"]
+                )
 
         if isinstance(self.env, ObjectWorldEnvironment):
             # for object world track reward evolution
@@ -213,7 +256,7 @@ class Learner(Agent):
             if (
                 (t % 10 - 1) == 0
                 and isinstance(self.solver, MDPSolverApproximation)
-                and isinstance(self.env, CarRacingEnvironment)
+                # and isinstance(self.env, CarRacingEnvironment)
             ):
                 # evaluate agent with a recorded episode
                 path_to_file = self.render(False, True)
@@ -226,29 +269,37 @@ class Learner(Agent):
                             )
                         }
                     )
+            if (alternate_every is None) or (
+                int(t / alternate_every) % var_factor == 0
+            ):
+                # Compute gradient for reward part
+                grad_e = torch.tensor(
+                    mu_reward_agent - self.mu_demonstrator[0], dtype=torch.float32
+                )
 
-            # Compute gradient for reward part
-            grad_e = torch.tensor(
-                mu_reward_agent - self.mu_demonstrator[0], dtype=torch.float32
-            )
+                optimizer_e.zero_grad()
+                theta_e.grad = grad_e
+                optimizer_e.step()
+                scheduler_e.step()
 
-            optimizer_e.zero_grad()
-            theta_e.grad = grad_e
-            optimizer_e.step()
-            scheduler_e.step()
+                # Clamp values (optional, depending on your upper bounds)
+                with torch.no_grad():
+                    theta_e.clamp_(-self.theta_upperBound, self.theta_upperBound)
 
-            # Clamp values (optional, depending on your upper bounds)
-            with torch.no_grad():
-                theta_e.clamp_(-self.theta_upperBound, self.theta_upperBound)
-
-            if calc_theta_v:
+            if calc_theta_v and (
+                (alternate_every is None)
+                or (int(t / alternate_every) % var_factor != 0)
+            ):
                 grad_v = torch.tensor(
                     mu_variance_agent - self.mu_demonstrator[1], dtype=torch.float32
                 )
                 optimizer_v.zero_grad()
                 theta_v.grad = grad_v
                 optimizer_v.step()
-                scheduler_v.step()
+                if isinstance(scheduler_v, ReduceLROnPlateau):
+                    scheduler_v.step(theta_v_diff)
+                else:
+                    scheduler_v.step()
 
                 with torch.no_grad():
                     theta_v.clamp_(-self.theta_upperBound, self.theta_upperBound)
@@ -257,8 +308,15 @@ class Learner(Agent):
             runtime.append(end - start)
 
             # Convergence check
-            theta_e_diff = torch.norm(theta_e.grad).item()
-            if calc_theta_v:
+
+            if (alternate_every is None) or (
+                int(t / alternate_every) % var_factor == 0
+            ):
+                theta_e_diff = torch.norm(theta_e.grad).item()
+            if calc_theta_v and (
+                (alternate_every is None)
+                or (int(t / alternate_every) % var_factor != 0)
+            ):
                 theta_v_diff = torch.norm(theta_v.grad).item()
 
             wandb.log(
@@ -266,15 +324,10 @@ class Learner(Agent):
                     f"step_{self.agent_name}": t,
                     f"theta_e_diff_{self.agent_name}": theta_e_diff,
                     f"lr_e_{self.agent_name}": scheduler_e.get_last_lr()[0],
-                    f"grad_norm_theta_e_{self.agent_name}": torch.norm(
-                        theta_e.grad
-                    ).item(),
                     **(
                         {
                             f"theta_v_diff_{self.agent_name}": theta_v_diff,
-                            f"grad_norm_theta_v_{self.agent_name}": torch.norm(
-                                theta_v.grad
-                            ).item(),
+                            f"lr_v_{self.agent_name}": scheduler_v.get_last_lr()[0],
                         }
                         if calc_theta_v
                         else {}
@@ -329,8 +382,18 @@ class TabularLearner(Learner):
         name of the agent
     solver : MDPSolverExact
         solver to use (either only expectation matching or also variance matching) (must be a tabular/exact solver)
-    learning_rate
-        custom learning rate (decreasing) function
+    learning_rate_e
+        custom learning rate (decreasing) function for theta_e
+    learning_rate_v
+        custom learning rate (decreasing) function for theta_v
+    optimizer_e:
+        optimizer to use during the dual ascent for theta_e
+    optimizer_v:
+        optimizer to use during the dual acent for theta_v
+    optimizer_e_kwargs:
+        keyed arguments to use for the optimizer of theta_e
+    optimizer_v_kwargs:
+        keyed arguments to use for the optimizer of theta_v
     """
 
     def __init__(
@@ -340,11 +403,26 @@ class TabularLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverExact,
-        learning_rate=None,
+        learning_rate_e=None,
+        learning_rate_v=None,
+        optimizer_e=None,
+        optimizer_v=None,
+        optimizer_e_kwargs=None,
+        optimizer_v_kwargs=None,
     ):
 
         super().__init__(
-            env, mu_demonstrator, config_agent, agent_name, solver, learning_rate
+            env,
+            mu_demonstrator,
+            config_agent,
+            agent_name,
+            solver,
+            learning_rate_e,
+            learning_rate_v,
+            optimizer_e,
+            optimizer_v,
+            optimizer_e_kwargs,
+            optimizer_v_kwargs,
         )
 
     def get_linear_reward(self) -> np.ndarray:
@@ -416,8 +494,18 @@ class ApproximateLearner(Learner):
         name of the agent
     solver : MDPSolverExact
         solver to use (either only expectation matching or also variance matching) (must be an approximation solver)
-    learning_rate
-        custom learning rate (decreasing) function
+    learning_rate_e
+        custom learning rate (decreasing) function for theta_e
+    learning_rate_v
+        custom learning rate (decreasing) function for theta_v
+    optimizer_e:
+        optimizer to use during the dual ascent for theta_e
+    optimizer_v:
+        optimizer to use during the dual acent for theta_v
+    optimizer_e_kwargs:
+        keyed arguments to use for the optimizer of theta_e
+    optimizer_v_kwargs:
+        keyed arguments to use for the optimizer of theta_v
     heuristic_theta_e : ndarray
         heuristic that should be used for theta_e to simplify training
     heuristic_theta_v : ndarray
@@ -431,13 +519,28 @@ class ApproximateLearner(Learner):
         config_agent: dict[str:any],
         agent_name: str,
         solver: MDPSolverApproximation,
-        learning_rate=None,
+        learning_rate_e=None,
+        learning_rate_v=None,
+        optimizer_e=None,
+        optimizer_v=None,
+        optimizer_e_kwargs=None,
+        optimizer_v_kwargs=None,
         heuristic_theta_e: np.ndarray = None,
         heuristic_theta_v: np.ndarray = None,
     ):
 
         super().__init__(
-            env, mu_demonstrator, config_agent, agent_name, solver, learning_rate
+            env,
+            mu_demonstrator,
+            config_agent,
+            agent_name,
+            solver,
+            learning_rate_e,
+            learning_rate_v,
+            optimizer_e,
+            optimizer_v,
+            optimizer_e_kwargs,
+            optimizer_v_kwargs,
         )
 
         if heuristic_theta_e is not None:
