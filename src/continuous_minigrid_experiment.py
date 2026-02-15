@@ -93,7 +93,7 @@ if __name__ == "__main__":
     store = True
     env_name = "MiniGrid-DoorKey-5x5-v0"
     demo_training_algorithm = "ppo"
-    agent_training_algorithm = "sac"
+    agent_training_algorithm = "dqn"
 
     grid_size = 5
     T = 70
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     n_trajectories = 150
     training_timesteps = 350000
     policy_config = dict(
-        buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5, device="auto"
+        policy= "CnnPolicy", buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5, device="auto"
     )
 
     policy_kwargs = dict(
@@ -110,7 +110,7 @@ if __name__ == "__main__":
         features_extractor_kwargs=dict(features_dim=128),
     )
 
-    learning_rate = lambda step: max(0.975 ** (step + 1), 0.01)
+    learning_rate = lambda step: max(0.95 ** (step + 1), 0.01)
 
     wandb.init(
         project=f"mceirl-minigrid-{env_name}",
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     log_memory("start")
 
     # create the environment
-    env = create_minigrid_env(grid_size=grid_size, env_name=env_name)
+    env = create_minigrid_env(grid_size=grid_size, env_name=env_name, T=T)
 
     # Learner config
     config_default_learner = create_config_learner(n_trajectories, maxiter)
@@ -238,6 +238,7 @@ if __name__ == "__main__":
             T=T,
             compute_variance=False,
             policy_config=policy_config,
+            policy_kwargs=policy_kwargs,
             training_timesteps=training_timesteps,
         ),
         learning_rate=learning_rate,
