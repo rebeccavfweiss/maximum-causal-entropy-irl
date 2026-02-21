@@ -1,0 +1,86 @@
+environment:
+  type: car_racing
+  lap_complete_percent: 0.33
+  T: 400
+  gamma: 1.0
+  continuous_actions: false
+  n_frames: 4
+  width: 84
+  height: 84
+  n_trajectories_eval: 150
+
+demonstrator:
+  training_algorithm: dqn
+  n_trajectories: 150
+
+wandb:
+  project: "mceirl-car-racing-tuning"
+  sweep_count: 30
+
+sweep:
+  method: bayes
+  metric:
+    name: reward_variance
+    goal: maximize
+  parameters:
+    # Learner convergence (shared)
+    tol_exp:
+      values: [25.0, 50.0, 100.0]
+    maxiter:
+      values: [30, 50, 75]
+    miniter:
+      value: 1
+    n_trajectories:
+      value: 150
+    # Optimizer config (shared - theta_e)
+    optimizer_type_e:
+      values: ["Adam", "Adamax"]
+    lr_e:
+      distribution: log_uniform_values
+      min: 0.01
+      max: 0.3
+    weight_decay_e:
+      values: [0.0, 0.001]
+    lr_decay_rate:
+      values: [0.9, 0.95, 0.975]
+    # Variance-only params (removed for expectation sweeps)
+    tol_var:
+      values: [500.0, 1000.0, 1250.0]
+    optimizer_type_v:
+      values: ["Adam", "Adamax"]
+    lr_v:
+      distribution: log_uniform_values
+      min: 0.005
+      max: 0.1
+    weight_decay_v:
+      values: [0.0, 0.001]
+    lr_scheduler:
+      values: ["Lambda", "Reduce"]
+    lr_decay_rate_v:
+      values: [0.9, 0.95, 0.975]
+    alternate_every:
+      values: [null, 5, 10]
+    var_factor:
+      values: [2, 3, 4, 5]
+    # Approximate-only params (shared)
+    training_algorithm:
+      values: ["dqn"]
+    training_timesteps:
+      values: [200000, 350000, 500000]
+    policy_type:
+      value: "CnnPolicy"
+    buffer_size:
+      values: [25000, 50000]
+    tau:
+      values: [0.001, 0.005]
+    train_freq:
+      values: [3, 5]
+    # Car racing specific heuristic weights (shared)
+    weight_forward:
+      distribution: uniform
+      min: 0.01
+      max: 0.3
+    weight_speed_limitation:
+      distribution: uniform
+      min: 0.01
+      max: 0.15

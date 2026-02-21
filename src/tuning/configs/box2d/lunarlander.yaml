@@ -1,0 +1,78 @@
+environment:
+  type: box2d
+  env_id: "LunarLander-v3"
+  T: 800
+  gamma: 0.99
+  continuous: false
+  enable_wind: false
+  n_trajectories_eval: 500
+  hugging_face_repo: "Chiz"
+
+demonstrator:
+  training_algorithm: ppo
+  n_trajectories: 500
+
+wandb:
+  project: "mceirl-box2d-tuning"
+  sweep_count: 30
+
+sweep:
+  method: bayes
+  metric:
+    name: reward_variance
+    goal: maximize
+  parameters:
+    # Learner convergence (shared)
+    tol_exp:
+      values: [0.0001, 0.0005, 0.001]
+    maxiter:
+      values: [300, 500, 750]
+    miniter:
+      value: 1
+    n_trajectories:
+      value: 500
+    # Optimizer config (shared - theta_e)
+    optimizer_type_e:
+      values: ["Adam", "RMSprop", "Adamax"]
+    lr_e:
+      distribution: log_uniform_values
+      min: 0.005
+      max: 0.3
+    weight_decay_e:
+      values: [0.0, 0.001]
+    lr_decay_rate:
+      values: [0.9, 0.95, 0.975]
+    # Variance-only params (removed for expectation sweeps)
+    tol_var:
+      values: [0.005, 0.0125, 0.025]
+    optimizer_type_v:
+      values: ["Adam", "RMSprop", "Adamax"]
+    lr_v:
+      distribution: log_uniform_values
+      min: 0.005
+      max: 0.1
+    weight_decay_v:
+      values: [0.0, 0.001]
+    lr_scheduler:
+      values: ["Lambda", "Reduce"]
+    lr_decay_rate_v:
+      values: [0.9, 0.95, 0.975]
+    alternate_every:
+      values: [null, 10, 25, 50]
+    var_factor:
+      values: [2, 3, 4, 5]
+    # Approximate-only params (shared)
+    training_algorithm:
+      values: ["dqn"]
+    training_timesteps:
+      values: [300000, 500000, 750000]
+    policy_type:
+      value: "MlpPolicy"
+    buffer_size:
+      values: [25000, 50000, 100000]
+    tau:
+      values: [0.001, 0.005, 0.01]
+    train_freq:
+      values: [3, 5, 10]
+    net_arch:
+      values: [[64, 64], [128, 128], [256, 256]]
