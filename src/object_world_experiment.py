@@ -41,10 +41,10 @@ def create_objectworld_env(
 
 def create_config_learner():
     config_default_learner = {
-        "tol_exp": 0.005,
-        "tol_var": 0.5,
+        "tol_exp": 0.001,
+        "tol_var": 0.01,
         "miniter": 1,
-        "maxiter": 5000,
+        "maxiter": 10_000,
     }
 
     return config_default_learner
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     show = False
     store = True
-    n_trajectories = 100
+    n_trajectories = 200
     experiment_name = "object-world"
     T = 20
     grid_size = 6
@@ -69,12 +69,14 @@ if __name__ == "__main__":
         },
     }
     learning_rate_e = {
-        "scheduler": ReduceLROnPlateau,
-        "scheduler_kwargs": {"min_lr": 0.0005},
+        "scheduler": LambdaLR,
+        "scheduler_kwargs": {
+            "lr_lambda": lambda step: max(0.95 ** np.log(step + 1), 0.001)
+        },
     }
     learning_rate_v = {
         "scheduler": ReduceLROnPlateau,
-        "scheduler_kwargs": {"min_lr": 0.0005},
+        "scheduler_kwargs": {"min_lr": 0.0001, "factor":0.5},
     }
     optimizer_e = Adamax
     optimizer_v = Adamax

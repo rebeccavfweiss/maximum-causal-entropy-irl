@@ -8,6 +8,7 @@ from torch.optim import Adam, RMSprop, SGD, Adamax
 from torch.optim.lr_scheduler import LambdaLR, CyclicLR, ReduceLROnPlateau
 import wandb
 from pathlib import Path
+import multiprocessing
 
 
 def create_objectworld_env(
@@ -208,6 +209,22 @@ if __name__ == "__main__":
     sweep_id = wandb.sweep(sweep_config, project="mceirl-object-world-tuning")
 
     # Run the agent
-    wandb.agent(
-        sweep_id, function=train, count=30
-    )  # 'count' is how many combinations to try
+    # wandb.agent(
+    #     sweep_id, function=train, count=30
+    # )  # 'count' is how many combinations to try
+
+    num_agents = 5 
+
+    processes = []
+    for i in range(num_agents):
+        # We use a helper to call wandb.agent in a separate process
+        p = multiprocessing.Process(
+            target=wandb.agent, 
+            args=(sweep_id,), 
+            kwargs={'function': train, 'count': 10} # Each agent does 5 runs
+        )
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
