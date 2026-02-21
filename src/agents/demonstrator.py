@@ -2,7 +2,7 @@ import solvers.MDP_solver as MDP_solver
 from solvers.MDP_solver_exact import MDPSolverExactExpectation
 from environments.environment import Environment, ContinuousEnvironment
 from environments.simple_environment import SimpleEnvironment
-from environments.minigrid_environment import MinigridEnvironment
+from environments.discrete_minigrid_environment import DiscreteMinigridEnvironment
 from environments.object_world_environment import ObjectWorldEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
