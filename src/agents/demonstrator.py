@@ -1,6 +1,6 @@
-import MDP_solver
-from MDP_solver_exact import MDPSolverExactExpectation
-from environments.environment import Environment
+import solvers.MDP_solver as MDP_solver
+from solvers.MDP_solver_exact import MDPSolverExactExpectation
+from environments.environment import Environment, ContinuousEnvironment
 from environments.simple_environment import SimpleEnvironment
 from environments.minigrid_environment import MinigridEnvironment
 from environments.object_world_environment import ObjectWorldEnvironment
@@ -16,6 +16,7 @@ from operator import itemgetter
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from pathlib import Path
+from huggingface_sb3 import load_from_hub
 import torch
 
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
@@ -180,7 +181,7 @@ class CrossingMinigridDemonstrator(Demonstrator):
 
     def __init__(
         self,
-        env: MinigridEnvironment,
+        env: DiscreteMinigridEnvironment,
         demonstrator_name: str,
         T: int = 45,
         n_trajectories: int = None,
@@ -284,7 +285,7 @@ class CrossingMinigridDemonstrator(Demonstrator):
         return pi_s
 
 
-class CarRacingDemonstrator(Demonstrator):
+class ContinuousDemonstrator(Demonstrator):
     """
     Demonstrator in a given Gymnasium environment. Currently this demonstrator will be just trained using stable baselines3 PPO <https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html>.
 
@@ -294,8 +295,8 @@ class CarRacingDemonstrator(Demonstrator):
         the environment representing the setting of the problem
     demonstrator_name : str
         name of the demonstrator
-    continuous_actions : bool
-        whether the environment has a continous or action space
+    training_algorithm : str
+        which algorithm should be used to train/load the policy
     T : int
         finite horizon value for the MDP solver
     gamma : float
@@ -308,44 +309,80 @@ class CarRacingDemonstrator(Demonstrator):
 
     def __init__(
         self,
-        env: MinigridEnvironment,
+        env: ContinuousEnvironment,
         demonstrator_name: str,
-        continuous_actions: bool = True,
+        training_algorithm: str = "ppo",
         T: int = 45,
         n_trajectories: int = 1,
         solver: MDP_solver = None,
         time_steps: int = 1_500_000,
+        policy_kwargs: dict = None,
+        hugging_face_repo: str = None,
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
-        self.continuous_actions = continuous_actions
-        if continuous_actions:
-            self.model_path = Path("models") / solver.experiment_name / "ppo_carracing"
+        self.training_algorithm = training_algorithm
+        if training_algorithm == "ppo":
+            self.model_path = Path("models") / solver.experiment_name / "ppo"
         else:
-            self.model_path = Path("models") / solver.experiment_name / "dqn_carracing"
+            self.model_path = Path("models") / solver.experiment_name / "dqn"
 
         self.log_dir = Path("experiments") / solver.experiment_name / "demonstrator"
 
-        self.policy = self.__train_demonstrator(time_steps)
+        self.repo_id = hugging_face_repo
+
+        self.policy = self.__train_demonstrator(time_steps, policy_kwargs)
 
         self.mu_demonstrator = self.get_mu_using_reward_features()
 
-    def __train_demonstrator(self, time_steps: int):
-        if os.path.exists(self.model_path):
-            wandb.log({"use_pretrained_model": True})
-            if self.continuous_actions:
-                model = PPO.load(self.model_path / "best_model.zip", env=self.env.env)
-            else:
-                model = DQN.load(
-                    self.model_path / "best_model.zip", device="auto", env=self.env.env
-                )
-        else:
-            wandb.log({"use_pretrained_model": False})
+    def __train_demonstrator(self, time_steps: int, policy_kwargs: dict):
 
-            if self.continuous_actions:
-                model = PPO("CnnPolicy", self.env.env, verbose=0)
+        if not (self.repo_id is None):
+            repo_id = f"{self.repo_id}/{self.training_algorithm}-{self.env.env_id}"
+            filename = f"{self.training_algorithm}-{self.env.env_id}.zip"
+
+            try:
+                print(f"Attempting to load pretrained model from RL Zoo: {repo_id}...")
+                checkpoint = load_from_hub(repo_id=repo_id, filename=filename)
+
+                if self.training_algorithm == "ppo":
+                    model = PPO.load(checkpoint, env=self.env.env, device="cpu")
+                else:
+                    model = DQN.load(checkpoint, env=self.env.env)
+
+                print(f"Successfully loaded {repo_id} from RL Zoo.")
+                wandb.log({"source": "rl_zoo"})
+                return ModelPolicy(model)
+
+            except Exception as e:
+                print(
+                    f"RL Zoo model not found or error occurred: {e}. Falling back to local logic."
+                )
+        # 2. Existing Local Check / Training Logic
+        if os.path.exists(self.model_path / "best_model.zip"):
+            wandb.log({"use_pretrained_model": True, "source": "local"})
+            # ... your existing loading code ...
+            model_file = self.model_path / "best_model"
+            if self.training_algorithm == "ppo":
+                model = PPO.load(model_file, env=self.env.env)
             else:
-                model = DQN("CnnPolicy", self.env.env, verbose=0, buffer_size=250000)
+                model = DQN.load(model_file, device="auto", env=self.env.env)
+        else:
+            # ... your existing training code ...
+            wandb.log({"use_pretrained_model": False, "source": "training"})
+
+            if self.training_algorithm == "ppo":
+                model = PPO(
+                    "MlpPolicy", self.env.env, verbose=0, policy_kwargs=policy_kwargs
+                )
+            else:
+                model = DQN(
+                    "MlpPolicy",
+                    self.env.env,
+                    verbose=0,
+                    buffer_size=250000,
+                    policy_kwargs=policy_kwargs,
+                )
 
             callback = CallbackList(
                 [
@@ -370,7 +407,7 @@ class CarRacingDemonstrator(Demonstrator):
             wandb.log_artifact(artifact)
 
             # actually use best model and not last
-            if self.continuous_actions:
+            if self.training_algorithm == "ppo":
                 model = PPO.load(self.model_path / "best_model")
             else:
                 model = DQN.load(self.model_path / "best_model")

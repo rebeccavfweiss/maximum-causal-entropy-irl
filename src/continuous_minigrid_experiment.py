@@ -1,6 +1,6 @@
 import agents.learner as learner
 import agents.demonstrator as demonstrator
-from environments.car_racing_environment import CarRacingEnvironment
+from environments.continuous_minigrid_environment import ContinuousMinigridEnvironment
 from solvers.MDP_solver_approximation import (
     MDPSolverApproximationExpectation,
     MDPSolverApproximationVariance,
@@ -9,27 +9,27 @@ import numpy as np
 import psutil
 import gc
 import wandb
-import torch
+from random import randint
+import minigrid
+import torch as th
+import torch.nn as nn
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 
-def create_carracing_env(
-    lap_complete_percent: float = 0.95,
-    T: int = 1000,
-    gamma: float = 0.99,
-    continuous_actions: bool = True,
+def create_minigrid_env(
+    grid_size: int = 9, T: int = 25, env_name: str = "MiniGrid-DoorKey-5x5-v0"
 ):
 
     config_env = {
-        "gamma": gamma,
-        "lap_complete_percent": lap_complete_percent,
+        "gamma": 1.0,
+        "env_name": env_name,
+        "render_mode": "rgb_array",
+        "grid_size": grid_size,
+        "seed": None,
         "T": T,
-        "n_frames": 4,
-        "width": 84,
-        "height": 84,
-        "continuous_actions": continuous_actions,
     }
 
-    env = CarRacingEnvironment(config_env)
+    env = ContinuousMinigridEnvironment(config_env)
     return env
 
 
@@ -56,129 +56,78 @@ def log_memory(stage=""):
     )
 
 
-def temporal_diff_matrix(num_frames: int, frame_size: int):
-    """
-    Construct a quadratic penalty matrix D such that:
-    R(s) = s^T D s = sum_i ||f_i - f_{i-1}||^2
+class DynamicMiniGridExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space, features_dim=128):
+        # We don't know the flatten size yet, so we call super() first
+        super().__init__(observation_space, features_dim)
 
-    Args:
-        num_frames (int): number of stacked frames (e.g., 4)
-        frame_size (int): number of pixels per frame (e.g., 84*84 = 7056)
+        # MiniGrid observations are typically (channels, height, width)
+        n_input_channels = observation_space.shape[0]
 
-    Returns:
-        D (np.ndarray): block matrix of shape (num_frames*frame_size, num_frames*frame_size)
-    """
-    size = num_frames * frame_size
-    D = np.zeros((size, size))
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 16, kernel_size=5, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Flatten(),
+        )
 
-    I = np.eye(frame_size)
+        # --- DYNAMIC CALCULATION ---
+        # 1. Create a fake image matching the observation space shape
+        # 2. Pass it through the CNN layers defined above
+        # 3. Check the output shape
+        with th.no_grad():
+            sample_tensor = th.as_tensor(observation_space.sample()[None]).float()
+            n_flatten = self.cnn(sample_tensor).shape[1]
 
-    for i in range(1, num_frames):
-        # Indices for frame i-1 and i
-        a = (i - 1) * frame_size
-        b = i * frame_size
+        # Use that calculated n_flatten to build the linear head
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
 
-        # Expand (f_i - f_{i-1})^T (f_i - f_{i-1})
-        # = f_i^T f_i + f_{i-1}^T f_{i-1} - 2 f_i^T f_{i-1}
-        D[a : a + frame_size, a : a + frame_size] += I
-        D[b : b + frame_size, b : b + frame_size] += I
-        D[a : a + frame_size, b : b + frame_size] -= I
-        D[b : b + frame_size, a : a + frame_size] -= I
-
-    return D
-
-
-def compute_heuristics(width, height, weight_forward, weight_speed_limitation):
-    # Create a mask that favors the center
-    y = np.linspace(-1, 1, width)
-    x = np.linspace(-1, 1, height)
-    X, Y = np.meshgrid(x, y, indexing="ij")
-    dist_from_center = np.sqrt(X**2 + Y**2) - 0.5 * X
-
-    # Invert to give high weight to center, low to edges
-    center_mask = 1.0 - dist_from_center  # range ~[0, 1]
-    center_mask = np.clip(center_mask, 0, 0.9)
-
-    # Normalize
-    center_mask /= 255.0  # center_mask.sum()
-
-    D = temporal_diff_matrix(4, width * height)
-
-    h_theta_e = -np.tile(center_mask.flatten(), 4)
-    h_theta_v = (
-        np.diag(h_theta_e) + weight_forward * D - weight_speed_limitation * D.dot(D)
-    )
-
-    return h_theta_e, h_theta_v
+    def forward(self, observations):
+        return self.linear(self.cnn(observations))
 
 
 if __name__ == "__main__":
 
     show = False
     store = True
-    continuous_actions = False
-    experiment_name = "car_racing" + (
-        "_continuous" if continuous_actions else "_discrete"
-    )
+    env_name = "MiniGrid-DoorKey-5x5-v0"
+    demo_training_algorithm = "ppo"
+    agent_training_algorithm = "dqn"
 
-    demo_training_algorithm = "ppo" if continuous_actions else "dqn"
-    agent_training_algorithm = "sac" if continuous_actions else "dqn"
+    grid_size = 5
+    T = 70
 
     maxiter = 50
     n_trajectories = 150
     training_timesteps = 350000
     policy_config = dict(
-        policy="CnnPolicy",
-        buffer_size=50000,
-        tau=0.005,
-        gamma=1.0,
-        train_freq=5,
-        device="auto",
+        policy= "CnnPolicy", buffer_size=50000, tau=0.005, gamma=1.0, train_freq=5, device="auto"
     )
-    # does not really change anything so for now just limit T (i.e. technically goal of the agents now to just survive on the track as long as possible until time runs out as will not be possible to achieve lap in restricted time)
-    lap_percent_complete = 0.33
-    T = 400
-    weight_forward = 0.1
-    weight_speed_limitation = 0.05
 
-    learning_rate = {
-        "scheduler": torch.optim.lr_scheduler.LambdaLR,
-        "scheduler_kwargs": {"lr_lambda": lambda step: max(0.975 ** (step + 1), 0.01)},
-    }
+    policy_kwargs = dict(
+        features_extractor_class=DynamicMiniGridExtractor,
+        features_extractor_kwargs=dict(features_dim=128),
+    )
+
+    learning_rate = lambda step: max(0.95 ** (step + 1), 0.01)
 
     wandb.init(
-        project="mceirl-car-racing",
-        name=f"{experiment_name}-iter{maxiter}-sac_iter{training_timesteps}-T{T}-traj{n_trajectories}",
+        project=f"mceirl-minigrid-{env_name}",
+        name=f"{env_name}-g{grid_size}-T{T}-iter{maxiter}-sac_iter{training_timesteps}-traj{n_trajectories}",
         config={
             "maxiter": maxiter,
             "n_trajectories": n_trajectories,
             "sac_dqn_timesteps": training_timesteps,
             "sac_dqn_buffer_size": policy_config["buffer_size"],
-            "lap_percent_complete": lap_percent_complete,
-            "weight_forward": weight_forward,
-            "weight_speed_limitation": weight_speed_limitation,
             "T": T,
-            "actions_space": (
-                "continous action space"
-                if continuous_actions
-                else "discrete action space"
-            ),
         },
     )
 
     log_memory("start")
 
     # create the environment
-    env = create_carracing_env(
-        lap_complete_percent=lap_percent_complete,
-        T=T,
-        gamma=policy_config["gamma"],
-        continuous_actions=continuous_actions,
-    )
-
-    heuristic_theta_e, heuristic_theta_v = compute_heuristics(
-        env.frame_width, env.frame_height, weight_forward, weight_speed_limitation
-    )
+    env = create_minigrid_env(grid_size=grid_size, env_name=env_name, T=T)
 
     # Learner config
     config_default_learner = create_config_learner(n_trajectories, maxiter)
@@ -188,18 +137,21 @@ if __name__ == "__main__":
     # create demonstrator
     demo = demonstrator.ContinuousDemonstrator(
         env,
-        demonstrator_name="CarRacingDemonstrator",
-        training_algorithm=demo_training_algorithm,
+        demonstrator_name="MinigridDemonstrator",
         T=T,
         n_trajectories=n_trajectories,
+        training_algorithm=demo_training_algorithm,
         solver=MDPSolverApproximationExpectation(
-            experiment_name=experiment_name,
+            experiment_name=env_name,
             training_algorithm=demo_training_algorithm,
             T=T,
             compute_variance=True,
             policy_config=policy_config,
+            policy_kwargs=policy_kwargs,
             training_timesteps=training_timesteps,
         ),
+        policy_kwargs=policy_kwargs,
+        time_steps=7_500_000,
     )
 
     log_memory("demonstrator_creation")
@@ -237,16 +189,15 @@ if __name__ == "__main__":
         config_default_learner,
         agent_name="AgentVariance",
         solver=MDPSolverApproximationVariance(
-            experiment_name=experiment_name,
+            experiment_name=env_name,
             training_algorithm=agent_training_algorithm,
             T=T,
             compute_variance=True,
             policy_config=policy_config,
+            policy_kwargs=policy_kwargs,
             training_timesteps=training_timesteps,
         ),
-        learning_rate_e=learning_rate,
-        heuristic_theta_e=heuristic_theta_e,
-        heuristic_theta_v=heuristic_theta_v,
+        learning_rate=learning_rate,
     )
 
     iter_variance, time_variance = agent_variance.batch_MCE()
@@ -282,15 +233,15 @@ if __name__ == "__main__":
         config_default_learner,
         agent_name="AgentExpectation",
         solver=MDPSolverApproximationExpectation(
-            experiment_name=experiment_name,
             training_algorithm=agent_training_algorithm,
+            experiment_name=env_name,
             T=T,
             compute_variance=False,
             policy_config=policy_config,
+            policy_kwargs=policy_kwargs,
             training_timesteps=training_timesteps,
         ),
-        learning_rate_e=learning_rate,
-        heuristic_theta_e=heuristic_theta_e,
+        learning_rate=learning_rate,
     )
 
     iter_expectation, time_expectation = agent_expectation.batch_MCE()

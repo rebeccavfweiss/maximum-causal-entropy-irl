@@ -1,6 +1,6 @@
-import MDP_solver
-from MDP_solver_exact import MDPSolverExact, MDPSolverExactVariance
-from MDP_solver_approximation import (
+import solvers.MDP_solver as MDP_solver
+from solvers.MDP_solver_exact import MDPSolverExact, MDPSolverExactVariance
+from solvers.MDP_solver_approximation import (
     MDPSolverApproximation,
     MDPSolverApproximationVariance,
 )

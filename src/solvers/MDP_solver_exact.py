@@ -1,7 +1,7 @@
 import numpy as np
 import copy
 from scipy import sparse
-from MDP_solver import MDPSolver
+from solvers.MDP_solver import MDPSolver
 from environments.environment import Environment
 from policy import Policy, TabularPolicy
 

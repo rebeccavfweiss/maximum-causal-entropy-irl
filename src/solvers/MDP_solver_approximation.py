@@ -1,6 +1,6 @@
 import numpy as np
 from pathlib import Path
-from MDP_solver import MDPSolver
+from solvers.MDP_solver import MDPSolver
 from environments.environment import Environment
 from policy import Policy, ModelPolicy
 from stable_baselines3 import SAC, DQN
@@ -9,6 +9,7 @@ from utils import TimedEvalCallback
 from wandb.integration.sb3 import WandbCallback
 
 import os
+
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 
 
@@ -29,8 +30,8 @@ class MDPSolverApproximation(MDPSolver):
         finite horizon value
     compute_variance : bool
         whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
-    continuous_actions : bool
-        whether the environment has a continuous or discrete action space
+    training_algorithm : str
+        which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
         buffer_size : int
@@ -39,6 +40,8 @@ class MDPSolverApproximation(MDPSolver):
             soft update coefficient ("Polyak update", between 0 and 1)
         train_freq: int
             number of training steps after which the target network should be updated
+    policy_kwargs : dict
+        additional information for the custom feature extractor that is necessary for small environments to adjust the kernel size of the policy
     training_timesteps : int
             timesteps for embedded SAC/DQN training in the approximated SVI
     log_dir : str
@@ -51,17 +54,19 @@ class MDPSolverApproximation(MDPSolver):
         self,
         T: int,
         compute_variance: bool,
-        continuous_actions: bool,
+        training_algorithm: str,
         policy_config: dict[str, any],
-        training_timesteps : int = 10000,
+        policy_kwargs: dict = None,
+        training_timesteps: int = 10000,
         log_dir: str = None,
         model_dir: str = None,
     ):
 
         super().__init__(T, compute_variance)
 
-        self.continuous_actions = continuous_actions
+        self.training_algorithm = training_algorithm
         self.policy_config = policy_config
+        self.policy_kwargs = policy_kwargs
         self.training_timesteps = training_timesteps
 
         self.log_dir = log_dir
@@ -115,8 +120,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
     ----------
     experiment_name : str
         name for the experiment that will be used in naming logging/storage directories
-    continuous_actions : bool
-        whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    training_algorithm : str
+        which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
         buffer_size : int
@@ -125,6 +130,8 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
             soft update coefficient ("Polyak update", between 0 and 1)
         train_freq: int
             number of training steps after which the target network should be updated
+    policy_kwargs : dict
+        additional information for the custom feature extractor that is necessary for small environments to adjust the kernel size of the policy
     training_timesteps : int
             timesteps for embedded SAC/DQN training in the approximated SVI
     T : int
@@ -136,21 +143,22 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
     def __init__(
         self,
         experiment_name: str,
-        continuous_actions : bool,
-        policy_config : dict[str, any],
-        training_timesteps : int =10000,
+        training_algorithm: str,
+        policy_config: dict[str, any],
+        policy_kwargs: dict = None,
+        training_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = False,
-        
     ):
         super().__init__(
             T,
             compute_variance,
-            continuous_actions,
+            training_algorithm,
             policy_config,
+            policy_kwargs,
             training_timesteps,
-            log_dir=Path("experiments")/experiment_name/"agent_expectation",
-            model_dir=Path("models")/experiment_name/"agent_expectation",
+            log_dir=Path("experiments") / experiment_name / "agent_expectation",
+            model_dir=Path("models") / experiment_name / "agent_expectation",
         )
         self.experiment_name = experiment_name
 
@@ -173,10 +181,20 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
 
         env.set_custom_reward_function(lambda s: values["reward"](s.flatten()))
 
-        if self.continuous_actions:
-            model = SAC("CnnPolicy", env.env, verbose=0, **self.policy_config)
+        if self.training_algorithm == "sac":
+            model = SAC(
+                env=env.env,
+                verbose=0,
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
+            )
         else:
-            model = DQN("CnnPolicy", env.env, verbose=0, **self.policy_config)
+            model = DQN(
+                env=env.env,
+                verbose=0,
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
+            )
 
         callback = CallbackList(
             [
@@ -193,16 +211,18 @@ class MDPSolverApproximationExpectation(MDPSolverApproximation):
         )
 
         model.learn(
-            total_timesteps=self.training_timesteps, callback=callback, progress_bar=True
+            total_timesteps=self.training_timesteps,
+            callback=callback,
+            progress_bar=True,
         )
 
         env.reset_reward_function()
 
-        if self.continuous_actions:
-        # actually return best trained model and not last
-            return ModelPolicy(SAC.load(self.model_dir/"best_model"))
-        else: 
-            return ModelPolicy(DQN.load(self.model_dir/"best_model"))
+        if self.training_algorithm == "sac":
+            # actually return best trained model and not last
+            return ModelPolicy(SAC.load(self.model_dir / "best_model"))
+        else:
+            return ModelPolicy(DQN.load(self.model_dir / "best_model"))
 
 
 class MDPSolverApproximationVariance(MDPSolverApproximation):
@@ -213,16 +233,20 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
     ----------
     experiment_name : str
         name for the experiment that will be used in naming logging/storage directories
-    continuous_actions : bool
-        whether or not variance term should be computed (for efficiency reasons will only be computed if necessary)
+    training_algorithm : str
+        which algorithm should be used to approximate the Q-Learning
     policy_config : dict[str, any]
         dictionary containing parameters for SAC/DQN, e.g.,
+        policy_type: str
+            what policy to use
         buffer_size : int
             buffer size for embedded SAC/DQN training in the approximated SVI
         tau : float
             soft update coefficient ("Polyak update", between 0 and 1)
         train_freq: int
             number of training steps after which the target network should be updated
+    policy_kwargs : dict
+        additional information for the custom feature extractor that is necessary for small environments to adjust the kernel size of the policy
     training_timesteps : int
             timesteps for embedded SAC/DQN training in the approximated SVI
     T : int
@@ -234,21 +258,22 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
     def __init__(
         self,
         experiment_name: str,
-        continuous_actions: bool,
-        policy_config: dict[str,any],
+        training_algorithm: str,
+        policy_config: dict[str, any],
+        policy_kwargs: dict = None,
         training_timesteps: int = 10000,
         T: int = 45,
         compute_variance: bool = True,
-
     ):
         super().__init__(
             T,
             compute_variance,
-            continuous_actions,
+            training_algorithm,
             policy_config,
+            policy_kwargs,
             training_timesteps,
-            log_dir=Path("experiments")/experiment_name/"agent_variance",
-            model_dir=Path("models")/experiment_name/"agent_variance",
+            log_dir=Path("experiments") / experiment_name / "agent_variance",
+            model_dir=Path("models") / experiment_name / "agent_variance",
         )
         self.experiment_name = experiment_name
 
@@ -274,10 +299,20 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
             lambda s: values["reward"](s.flatten()) + values["variance"](s.flatten())
         )
 
-        if self.continuous_actions:
-            model = SAC("CnnPolicy", env.env, verbose=0, **self.policy_config)
+        if self.training_algorithm == "sac":
+            model = SAC(
+                env=env.env,
+                verbose=0,
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
+            )
         else:
-            model = DQN("CnnPolicy", env.env, verbose=0, **self.policy_config)
+            model = DQN(
+                env=env.env,
+                verbose=0,
+                **self.policy_config,
+                policy_kwargs=self.policy_kwargs
+            )
 
         callback = CallbackList(
             [
@@ -294,13 +329,15 @@ class MDPSolverApproximationVariance(MDPSolverApproximation):
         )
 
         model.learn(
-            total_timesteps=self.training_timesteps, callback=callback, progress_bar=True
+            total_timesteps=self.training_timesteps,
+            callback=callback,
+            progress_bar=True,
         )
 
         env.reset_reward_function()
 
-        if self.continuous_actions:
-        # actually return best trained model and not last
-            return ModelPolicy(SAC.load(self.model_dir/"best_model"))
-        else: 
-            return ModelPolicy(DQN.load(self.model_dir/"best_model"))
+        if self.training_algorithm == "sac":
+            # actually return best trained model and not last
+            return ModelPolicy(SAC.load(self.model_dir / "best_model"))
+        else:
+            return ModelPolicy(DQN.load(self.model_dir / "best_model"))

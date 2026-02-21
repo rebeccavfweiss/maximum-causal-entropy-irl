@@ -1,4 +1,10 @@
 from environments.environment import ContinuousEnvironment
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+from stable_baselines3.common.env_util import make_vec_env
+import gymnasium as gym
+import numpy as np
+
+from environments.environment import ContinuousEnvironment
 from policy import Policy
 from stable_baselines3.common.vec_env import (
     VecFrameStack,
@@ -15,57 +21,47 @@ from pathlib import Path
 import gymnasium as gym
 
 
-class CarRacingEnvironment(ContinuousEnvironment):
+class Box2DEnvironment(ContinuousEnvironment):
     """
-    Wrapper class for the gymnasium car racing environment <https://gymnasium.farama.org/environments/box2d/car_racing/>
-    in order to work with our agents
-
-    Parameters
-    ----------
-    env_args: dict[Any]
-        environment definition parameters depending on the specific environment used
-
+    Wrapper for LunarLander-v2 and BipedalWalker-v3 environments.
     """
 
     def __init__(self, env_args: dict):
-
         super().__init__(env_args)
+        self.env_id = env_args["env_id"]  # e.g., "LunarLanderContinuous-v2"
+        self.n_envs = env_args.get("n_envs", 1)
 
-        self.frame_width = env_args["width"]
-        self.frame_height = env_args["height"]
-        self.n_frames = env_args["n_frames"]
-        self.lap_complete_percent = env_args["lap_complete_percent"]
+        # Initialize vectorized environment
+        env = make_vec_env(
+            self.env_id,
+            n_envs=self.n_envs,
+            wrapper_class=None,  # Add custom wrappers here if needed
+        )
+        self.continuous = env_args["continuous"]
 
-        self.continuous_actions = env_args["continuous_actions"]
-
-        env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
-        self.env = VecTransposeImage(env)
-
-        env = VecFrameStack(self.make_env(), n_stack=env_args["n_frames"])
-        self.env_val = VecTransposeImage(env)
-
+        # Apply normalization (standard practice for vector-based Box2D envs)
+        self.env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.0)
+        self.env_val = VecNormalize(
+            env, norm_obs=True, norm_reward=False, clip_obs=10.0
+        )
         self._base_env = self.env
 
-        self.n_features = self.env.observation_space.sample().flatten().shape[0]
+        self.n_features = self.env.observation_space.sample().shape[0]
 
-    def make_env(self):
-        env_kwargs = {
-            "render_mode": "rgb_array",
-            "continuous": self.continuous_actions,
-            "lap_complete_percent": self.lap_complete_percent,
-            "domain_randomize": False,
-            "max_episode_steps": self.T,
-        }
-        env = make_vec_env(
-            "CarRacing-v3",
-            n_envs=1,
-            wrapper_class=WarpFrame,
-            wrapper_kwargs={"width": self.frame_width, "height": self.frame_height},
-            env_kwargs=env_kwargs,
-        )
-        # env = VecNormalizeObs(env, NormalizeObs)
-
-        return env
+    def compute_true_reward_for_agent(self, agent, n_trajectories, T):
+        """Calculates the mean reward for an agent over multiple episodes."""
+        total_rewards = []
+        for _ in range(n_trajectories):
+            obs = self.env.reset()
+            episode_reward = 0
+            for _ in range(T):
+                action = agent.policy.predict(obs)
+                obs, reward, done, _ = self.env.step(action)
+                episode_reward += reward[0]
+                if done[0]:
+                    break
+            total_rewards.append(episode_reward)
+        return np.mean(total_rewards)
 
     def render(
         self,
@@ -98,12 +94,11 @@ class CarRacingEnvironment(ContinuousEnvironment):
             path to the file in which the video is stored
         """
 
-        name_prefix = "car_racing" + (
-            "_continuous" if self.continuous_actions else "_discrete"
-        )
+        name_prefix = self.env_id + ("_continuous" if self.continuous else "_discrete")
         env = VecVideoRecorder(
             self.env,
-            video_folder=os.path.dirname(f"recordings\car_racing\{strname}.mp4") or ".",
+            video_folder= Path("recordings") / self.env_id
+            or ".",
             record_video_trigger=lambda step: True,  # record first episode
             video_length=T,
             name_prefix=f"{name_prefix}_{strname}",
@@ -127,7 +122,7 @@ class CarRacingEnvironment(ContinuousEnvironment):
 
         return (
             Path("recordings")
-            / "car_racing"
+            / self.env_id
             / f"{name_prefix}_{strname}-step-0-to-step-{T}.mp4"
         )
 
@@ -160,30 +155,16 @@ class VecCustomRewardWrapper(VecEnvWrapper):
         return next_obs, custom_rewards, dones, info
 
 
-class NormalizeObs(gym.ObservationWrapper):
+class FixObservationSpace(gym.ObservationWrapper):
     def __init__(self, env):
         super().__init__(env)
-        obs_shape = self.observation_space.shape
+        # Manually override the observation space to match the model's expected Box(-inf, inf)
         self.observation_space = gym.spaces.Box(
-            low=0.0, high=1.0, shape=obs_shape, dtype=np.float32
+            low=-float("inf"),
+            high=float("inf"),
+            shape=(24,),
+            dtype=env.observation_space.dtype,
         )
 
-    def observation(self, obs):
-        return obs.astype(np.float32) / 255.0
-
-
-class VecNormalizeObs(VecEnvWrapper):
-    def __init__(self, venv, obs_wrapper_cls):
-        self.obs_wrapper = obs_wrapper_cls(venv.envs[0])
-        super().__init__(venv)
-
-    def reset(self):
-        obs = self.venv.reset()
-        return obs.astype(np.float32) / 255.0
-
-    def step_async(self, actions):
-        self.venv.step_async(actions)
-
-    def step_wait(self):
-        obs, rewards, dones, infos = self.venv.step_wait()
-        return obs.astype(np.float32) / 255.0, rewards, dones, infos
+    def observation(self, observation):
+        return super().observation(observation)

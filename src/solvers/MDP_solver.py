@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from environments.environment import Environment
 from policy import Policy
 import utils
+from stable_baselines3.common.vec_env import VecEnv
 
 np.set_printoptions(suppress=True)
 np.set_printoptions(precision=12)
