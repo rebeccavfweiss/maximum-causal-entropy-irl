@@ -41,7 +41,7 @@ VARIANCE_ONLY_PARAMS = {
     "optimizer_type_v",
     "lr_v",
     "weight_decay_v",
-    "lr_scheduler",
+    "lr_scheduler_v",
     "lr_decay_rate_v",
     "alternate_every",
     "var_factor",
@@ -88,6 +88,20 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
         dr ** np.log(step + 1), 0.001
     )
 
+    sched_name_e = getattr(sweep_config, "lr_scheduler_e", "Lambda")
+
+    lr_e_scheduler_args = {
+        "Lambda": {"lr_lambda": lr_lambda_e},
+        "Cyclic": {
+            "base_lr": sweep_config.lr_e,
+            "max_lr": 0.05,
+            "step_size_up": 100,
+            "mode": "exp_range",
+            "gamma": 0.975,
+        },
+        "Reduce": {"min_lr": 0.0005},
+    }
+
     result = {
         "optimizer_e": opt_cls_e,
         "optimizer_e_kwargs": {
@@ -95,8 +109,8 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
             "weight_decay": getattr(sweep_config, "weight_decay_e", 0.0),
         },
         "learning_rate_e": {
-            "scheduler": LambdaLR,
-            "scheduler_kwargs": {"lr_lambda": lr_lambda_e},
+            "scheduler": SCHEDULER_MAP[sched_name_e],
+            "scheduler_kwargs": lr_e_scheduler_args[sched_name_e],
         },
     }
 
@@ -108,7 +122,7 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
             dr ** np.log(step + 1), 0.001
         )
 
-        sched_name = getattr(sweep_config, "lr_scheduler", "Lambda")
+        sched_name_v = getattr(sweep_config, "lr_scheduler_v", "Lambda")
 
         lr_v_scheduler_args = {
             "Lambda": {"lr_lambda": lr_lambda_v},
@@ -128,8 +142,8 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
             "weight_decay": getattr(sweep_config, "weight_decay_v", 0.0),
         }
         result["learning_rate_v"] = {
-            "scheduler": SCHEDULER_MAP[sched_name],
-            "scheduler_kwargs": lr_v_scheduler_args[sched_name],
+            "scheduler": SCHEDULER_MAP[sched_name_v],
+            "scheduler_kwargs": lr_v_scheduler_args[sched_name_v],
         }
 
     return result
