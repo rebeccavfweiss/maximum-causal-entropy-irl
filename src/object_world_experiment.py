@@ -8,8 +8,8 @@ from multiprocessing import Pool
 import wandb
 import matplotlib.pylab as plt
 from pathlib import Path
-from torch.optim.lr_scheduler import LambdaLR
-from torch.optim import Adam, RMSprop, SGD
+from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR
+from torch.optim import Adamax
 
 
 def create_objectworld_env(
@@ -44,7 +44,7 @@ def create_config_learner():
         "tol_exp": 0.005,
         "tol_var": 0.5,
         "miniter": 1,
-        "maxiter": 6000,
+        "maxiter": 5000,
     }
 
     return config_default_learner
@@ -65,26 +65,22 @@ if __name__ == "__main__":
     learning_rate = {
         "scheduler": LambdaLR,
         "scheduler_kwargs": {
-            "lr_lambda": lambda step: max(0.95 ** np.log(step + 1), 0.0005 / 0.99)
+            "lr_lambda": lambda step: max(0.95 ** np.log(step + 1), 0.001)
         },
     }
     learning_rate_e = {
-        "scheduler": LambdaLR,
-        "scheduler_kwargs": {
-            "lr_lambda": lambda step: (max(0.9 ** np.log(step + 1), 0.001))
-        },
+        "scheduler": ReduceLROnPlateau,
+        "scheduler_kwargs": {"min_lr": 0.0005},
     }
     learning_rate_v = {
-        "scheduler": LambdaLR,
-        "scheduler_kwargs": {
-            "lr_lambda": lambda step: (max(0.82 ** np.log(step + 1), 0.001))
-        },
+        "scheduler": ReduceLROnPlateau,
+        "scheduler_kwargs": {"min_lr": 0.0005},
     }
-    optimizer_e = Adam
-    optimizer_v = Adam
-    optimizer_e_kwargs = {"lr": 0.1}
-    optimizer_v_kwargs = {"lr": 0.075, "eps": 1e-7, "weight_decay": 0.005}
-    alternate_every = 50
+    optimizer_e = Adamax
+    optimizer_v = Adamax
+    optimizer_e_kwargs = {"lr": 0.013481979369633936}
+    optimizer_v_kwargs = {"lr": 0.06503275998396742, "eps": 1e-7, "weight_decay": 0.005}
+    alternate_every = None
     var_factor = 5
 
     wandb.init(

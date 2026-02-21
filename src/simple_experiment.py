@@ -21,9 +21,15 @@ def create_simple_env():
 
 
 def create_config_learner():
-    config_default_learner = {"tol_exp": 0.0005,"tol_var": 0.0025, "miniter": 1, "maxiter": 3000}
+    config_default_learner = {
+        "tol_exp": 0.0005,
+        "tol_var": 0.0025,
+        "miniter": 1,
+        "maxiter": 3000,
+    }
 
     return config_default_learner
+
 
 def run_experiment(args):
     i, T = args
@@ -63,17 +69,13 @@ def run_experiment(args):
         agent_name="AgentExpectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
     )
-    iter_expectation, time_expectation = agent_expectation.batch_MCE()
+    iter_expectation, time_expectation = agent_expectation.batch_MCE(initial_lr=1.0)
     agent_expectation.compute_and_draw(False, False, 2)
-    reward_expectation = env.compute_true_reward_for_agent(
-        agent_expectation, None, T
-    )
+    reward_expectation = env.compute_true_reward_for_agent(agent_expectation, None, T)
     wandb.log(
         {
             "reward_expectation": reward_expectation,
-            "reward_diff_expectation": np.abs(
-                reward_demonstrator - reward_expectation
-            ),
+            "reward_diff_expectation": np.abs(reward_demonstrator - reward_expectation),
             "iterations_expectation": iter_expectation,
             "time_total_expectation": sum(time_expectation),
             "time_avg_per_iter_expectation": np.mean(time_expectation),
@@ -88,11 +90,9 @@ def run_experiment(args):
         agent_name="AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
     )
-    iter_variance, time_variance = agent_variance.batch_MCE()
+    iter_variance, time_variance = agent_variance.batch_MCE(initial_lr=1.0)
     agent_variance.compute_and_draw(False, False, 4)
-    reward_variance = env.compute_true_reward_for_agent(
-        agent_variance, None, T
-    )
+    reward_variance = env.compute_true_reward_for_agent(agent_variance, None, T)
 
     wandb.log(
         {
