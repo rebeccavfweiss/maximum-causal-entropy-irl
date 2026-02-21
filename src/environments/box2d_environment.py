@@ -97,7 +97,7 @@ class Box2DEnvironment(ContinuousEnvironment):
         name_prefix = self.env_id + ("_continuous" if self.continuous else "_discrete")
         env = VecVideoRecorder(
             self.env,
-            video_folder=os.path.dirname(f"recordings\{self.env_id}\{strname}.mp4")
+            video_folder= Path("recordings") / self.env_id
             or ".",
             record_video_trigger=lambda step: True,  # record first episode
             video_length=T,
