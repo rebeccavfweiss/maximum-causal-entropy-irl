@@ -45,6 +45,8 @@ class TabularPolicy(Policy):
         """
 
         probs = self.pi[t, obs]
+        if probs.sum() != 1.0:
+            probs /= probs.sum()
         action = int(np.random.choice(np.arange(len(probs)), p=probs))
 
         return action

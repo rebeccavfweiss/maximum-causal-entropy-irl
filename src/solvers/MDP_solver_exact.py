@@ -63,6 +63,7 @@ class MDPSolverExact(MDPSolver):
             transition probability matrix based on the policy (time dependent)
         """
         assert isinstance(policy, TabularPolicy)
+
         T_pi = np.zeros((self.T, env.n_states, env.n_states))
 
         for t in range(self.T):

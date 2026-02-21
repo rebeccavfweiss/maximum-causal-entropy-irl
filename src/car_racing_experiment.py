@@ -9,6 +9,7 @@ import numpy as np
 import psutil
 import gc
 import wandb
+import torch
 
 
 def create_carracing_env(
@@ -140,7 +141,10 @@ if __name__ == "__main__":
     weight_forward = 0.1
     weight_speed_limitation = 0.05
 
-    learning_rate = lambda step: max(0.975 ** (step + 1), 0.01)
+    learning_rate = {
+        "scheduler": torch.optim.lr_scheduler.LambdaLR,
+        "scheduler_kwargs": {"lr_lambda": lambda step: max(0.975 ** (step + 1), 0.01)},
+    }
 
     wandb.init(
         project="mceirl-car-racing",
@@ -240,7 +244,7 @@ if __name__ == "__main__":
             policy_config=policy_config,
             training_timesteps=training_timesteps,
         ),
-        learning_rate=learning_rate,
+        learning_rate_e=learning_rate,
         heuristic_theta_e=heuristic_theta_e,
         heuristic_theta_v=heuristic_theta_v,
     )
@@ -285,7 +289,7 @@ if __name__ == "__main__":
             policy_config=policy_config,
             training_timesteps=training_timesteps,
         ),
-        learning_rate=learning_rate,
+        learning_rate_e=learning_rate,
         heuristic_theta_e=heuristic_theta_e,
     )
 

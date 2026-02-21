@@ -2,19 +2,22 @@ import solvers.MDP_solver as MDP_solver
 from solvers.MDP_solver_exact import MDPSolverExactExpectation
 from environments.environment import Environment, ContinuousEnvironment
 from environments.simple_environment import SimpleEnvironment
-from environments.discrete_minigrid_environment import DiscreteMinigridEnvironment
+from environments.minigrid_environment import MinigridEnvironment
+from environments.object_world_environment import ObjectWorldEnvironment
 from policy import TabularPolicy, ModelPolicy
 from agents.agent import Agent
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.callbacks import CallbackList
 from utils import TimedEvalCallback
 import os
+import copy
 import numpy as np
 from operator import itemgetter
 import wandb
 from wandb.integration.sb3 import WandbCallback
 from pathlib import Path
 from huggingface_sb3 import load_from_hub
+import torch
 
 os.environ["WANDB_DISABLE_SYMLINK"] = "true"
 
@@ -410,3 +413,106 @@ class ContinuousDemonstrator(Demonstrator):
                 model = DQN.load(self.model_path / "best_model")
 
         return ModelPolicy(model)
+
+
+class ObjectWorldDemonstrator(Demonstrator):
+    """
+    class to implement the demonstrator that computes its policy for a certain reward using value iteration
+
+    Parameters
+    ----------
+    env : environment.Environment
+        the environment representing the setting of the problem
+    demonstrator_name : str
+        name of the demonstrator
+    T : int
+        finite horizon value for the MDP solver
+    n_trajectories : int
+        number of trajectories to use to compute the expectation values
+    """
+
+    def __init__(
+        self,
+        env: ObjectWorldEnvironment,
+        demonstrator_name: str,
+        T: int = 45,
+        n_trajectories: int = None,
+    ):
+        super().__init__(env, demonstrator_name, T, n_trajectories)
+
+        self.policy = TabularPolicy(self._define_policy())
+
+        self.mu_demonstrator = self.get_mu_using_reward_features()
+
+    def _define_policy(self):
+        real_rewards = torch.from_numpy(self.env.reward)
+
+        policy = self.__value_iteration(0.0001, real_rewards)
+        return policy
+
+    def __value_iteration(self, threshold, rewards, discount=0.975):
+        "Taken from <https://github.com/TroddenSpade/Maximum-Entropy-Deep-IRL/blob/main/DeepMaximumEntropy/value_iteration.py#L5>"
+        V = torch.zeros(self.env.n_states, dtype=torch.float32)
+        delta = np.inf
+
+        while delta > threshold:
+            delta = 0
+            for s in range(self.env.n_states):
+                max_v = torch.tensor([-float("inf")])
+                for a in range(self.env.n_actions):
+                    probs = torch.from_numpy(self.env.T_matrix[s, :, a]).float()
+                    max_v = torch.maximum(
+                        max_v, torch.dot(probs, rewards + discount * V)
+                    )
+                delta = max(delta, torch.abs(V[s] - max_v).numpy())
+                V[s] = max_v
+
+        policy = torch.zeros(
+            (self.env.n_states, self.env.n_actions), dtype=torch.float32
+        )
+        for s in range(self.env.n_states):
+            for a in range(self.env.n_actions):
+                probs = torch.from_numpy(self.env.T_matrix[s, :, a]).float()
+                policy[s, a] = torch.dot(probs, rewards + discount * V)
+
+        policy = policy.numpy()
+        policy = policy - policy.max(axis=1).reshape((self.env.n_states, 1))
+        exps = np.exp(policy)
+        policy = exps / exps.sum(axis=1).reshape((self.env.n_states, 1))
+
+        self.V = np.zeros((self.T, self.env.n_states))
+        for t in range(self.T):
+            self.V[t, :] = copy.deepcopy(V.numpy())
+
+        policy_t = np.zeros((self.T, self.env.n_states, self.env.n_actions))
+        for t in range(self.T):
+            policy_t[t, :, :] = copy.deepcopy(policy)
+        return policy_t
+
+    def render(self, show: bool = False, store: bool = False, fignum: int = 0) -> Path:
+        """
+        Overwrites the standard agent's rendering function to work with the new interface of the rendering function
+
+        Parameters
+        ----------
+        show : bool
+            whether or not the plot should be shown
+        store : bool
+            whether or not the plot should be stored
+        fignum : int
+            identifier number for the figure
+
+        Returns
+        -------
+        path : Path
+            path to the stored video (for the continuous environments) and None else
+        """
+
+        return self.env.render(
+            V=self.V,
+            rewards=[self.env.reward],
+            policy=self.policy,
+            show=show,
+            strname=self.agent_name,
+            store=store,
+        )
