@@ -16,14 +16,14 @@ wandb:
 sweep:
   method: bayes
   metric:
-    name: reward_variance
+    name: reward_diff_variance
     goal: maximize
   parameters:
     # Learner convergence (shared)
     tol_exp:
       values: [0.005, 0.01, 0.02]
     maxiter:
-      value: 5000
+      value: 1500
     miniter:
       value: 1
     # Optimizer config (shared - theta_e)

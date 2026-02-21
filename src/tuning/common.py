@@ -58,18 +58,18 @@ def prepare_sweep_config(sweep_config_from_yaml: dict, agent_type: str) -> dict:
     """
     Adjust the raw sweep config from YAML based on agent_type.
 
-    For "expectation": sets metric to reward_expectation, removes
+    For "expectation": sets metric to reward_diff_expectation, removes
     variance-only params from the search space.
-    For "variance": sets metric to reward_variance, keeps all params.
+    For "variance": sets metric to reward_diff_variance, keeps all params.
     """
     config = copy.deepcopy(sweep_config_from_yaml)
 
     if agent_type == "expectation":
-        config["metric"] = {"name": "reward_expectation", "goal": "maximize"}
+        config["metric"] = {"name": "reward_diff_expectation", "goal": "maximize"}
         for param in VARIANCE_ONLY_PARAMS:
             config["parameters"].pop(param, None)
     else:
-        config["metric"] = {"name": "reward_variance", "goal": "maximize"}
+        config["metric"] = {"name": "reward_diff_variance", "goal": "maximize"}
 
     return config
 
@@ -133,7 +133,7 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
                 "mode": "exp_range",
                 "gamma": 0.975,
             },
-            "Reduce": {"min_lr": 0.0005},
+            "Reduce": {"min_lr": 0.0001, "factor": 0.5},
         }
 
         result["optimizer_v"] = opt_cls_v
@@ -268,7 +268,7 @@ def train_and_evaluate_tabular(
         wandb.log(
             {
                 "reward_expectation": reward,
-                "reward_diff_expectation": np.abs(reward_demonstrator - reward),
+                "reward_diff_expectation": reward - reward_demonstrator,
                 "iterations_expectation": iters,
                 "time_total_expectation": sum(times),
                 "time_avg_per_iter_expectation": np.mean(times),
@@ -298,7 +298,7 @@ def train_and_evaluate_tabular(
         wandb.log(
             {
                 "reward_variance": reward,
-                "reward_diff_variance": np.abs(reward_demonstrator - reward),
+                "reward_diff_variance": reward - reward_demonstrator,
                 "iterations_variance": iters,
                 "time_total_variance": sum(times),
                 "time_avg_per_iter_variance": np.mean(times),
@@ -439,9 +439,8 @@ def train_and_evaluate_approximate(
         wandb.log(
             {
                 "reward_variance": reward,
-                "reward_diff_variance": np.abs(
-                    reward_demonstrator - reward
-                ),
+                "reward_diff_variance": reward - 
+                    reward_demonstrator,
                 "iterations_variance": iters,
                 "time_total_variance": sum(times),
                 "time_avg_per_iter_variance": np.mean(times),

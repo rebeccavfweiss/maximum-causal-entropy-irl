@@ -19,7 +19,7 @@ wandb:
 sweep:
   method: bayes
   metric:
-    name: reward_variance
+    name: reward_diff_variance
     goal: maximize
   parameters:
     # Learner convergence (shared)

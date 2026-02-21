@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import numpy as np
+import multiprocessing
 import wandb
 from random import randint
 import agents.demonstrator as demonstrator
@@ -96,8 +97,25 @@ if __name__ == "__main__":
     project = _yaml_config["wandb"]["project"]
 
     sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
-    wandb.agent(
-        sweep_id,
-        function=train,
-        count=_yaml_config["wandb"]["sweep_count"],
-    )
+    # wandb.agent(
+    #     sweep_id,
+    #     function=train,
+    #     count=_yaml_config["wandb"]["sweep_count"],
+    # )
+
+    num_agents = 5 
+
+    processes = []
+    for i in range(num_agents):
+        # We use a helper to call wandb.agent in a separate process
+        p = multiprocessing.Process(
+            target=wandb.agent, 
+            args=(sweep_id,), 
+            kwargs={'function': train, 'count': int(_yaml_config["wandb"]["sweep_count"]/num_agents)} # Each agent does 5 runs
+        )
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
+
