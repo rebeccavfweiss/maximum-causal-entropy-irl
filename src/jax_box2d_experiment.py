@@ -8,6 +8,7 @@ Optionally runs an MMD learner as a third comparison agent.
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["JAX_PLATFORMS"] = "cpu"
 
 import agents.demonstrator as demonstrator
 from agents.jax_learner import JaxApproximateLearner
