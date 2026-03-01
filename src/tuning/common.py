@@ -94,12 +94,12 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
         "Lambda": {"lr_lambda": lr_lambda_e},
         "Cyclic": {
             "base_lr": sweep_config.lr_e,
-            "max_lr": 0.05,
+            "max_lr": sweep_config.lr_e +0.05,
             "step_size_up": 100,
             "mode": "exp_range",
-            "gamma": 0.975,
+            "gamma": decay_rate_e,
         },
-        "Reduce": {"min_lr": 0.0005},
+        "Reduce": {"min_lr": 0.0001, "factor": 0.5},
     }
 
     result = {
@@ -128,10 +128,10 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
             "Lambda": {"lr_lambda": lr_lambda_v},
             "Cyclic": {
                 "base_lr": sweep_config.lr_v,
-                "max_lr": 0.05,
+                "max_lr": sweep_config.lr_v + 0.05,
                 "step_size_up": 100,
                 "mode": "exp_range",
-                "gamma": 0.975,
+                "gamma": decay_rate_v,
             },
             "Reduce": {"min_lr": 0.0001, "factor": 0.5},
         }
