@@ -9,6 +9,9 @@ import wandb
 from multiprocessing import Pool
 from pathlib import Path
 
+from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR, CyclicLR
+from torch.optim import Adamax, Adam, RMSprop
+
 
 def create_minigrid_env(grid_size: int = 9):
 
@@ -35,7 +38,7 @@ def create_config_learner(grid_size):
         "tol_exp": 0.01 * max(1, grid_size / 10),
         "tol_var": 0.125 * max(1, grid_size / 5),
         "miniter": 1,
-        "maxiter": 5000,
+        "maxiter": 3000,
     }
 
     return config_default_learner
@@ -55,6 +58,37 @@ def run_experiment(args):
         },
         reinit="finish_previous",
     )
+
+    learning_rate = {
+        "scheduler": CyclicLR,
+        "scheduler_kwargs": {
+                "base_lr": 0.36566080092610687,
+                "max_lr": 0.5,
+                "step_size_up": 100,
+                "mode": "exp_range",
+                "gamma": 0.975,
+            },
+    }
+    learning_rate_e = {
+        "scheduler": LambdaLR,
+        "scheduler_kwargs": {
+            "lr_lambda": lambda step: max(0.95 ** np.log(step + 1), 0.001)
+        },
+    }
+    learning_rate_v = {
+        "scheduler": LambdaLR,
+        "scheduler_kwargs": {
+            "lr_lambda": lambda step: max(0.8 ** np.log(step + 1), 0.001)
+        },
+    }
+    optimizer = Adam
+    optimizer_e = Adamax
+    optimizer_v = Adamax
+    optimizer_kwargs = {"lr":0.36566080092610687, "weight_decay":0}
+    optimizer_e_kwargs = {"lr": 0.10960901467727942, "weight_decay":0.001}
+    optimizer_v_kwargs = {"lr": 0.1763988117457932, "eps": 1e-7, "weight_decay": 0}
+    alternate_every = 50
+    var_factor = 5
 
     # Create the environment, learner, demonstrator, etc
     env = create_minigrid_env(grid_size)
@@ -84,6 +118,9 @@ def run_experiment(args):
         config_default_learner,
         agent_name="AgentExpectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
+        learning_rate_e=learning_rate,
+        optimizer_e=optimizer,
+        optimizer_e_kwargs=optimizer_kwargs,
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
 
@@ -105,6 +142,12 @@ def run_experiment(args):
         config_default_learner,
         agent_name="AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
+        # learning_rate_e=learning_rate_e,
+        # learning_rate_v=learning_rate_v,
+        # optimizer_e=optimizer_e,
+        # optimizer_v=optimizer_v,
+        # optimizer_e_kwargs=optimizer_e_kwargs,
+        # optimizer_v_kwargs=optimizer_v_kwargs,
     )
     iter_variance, time_variance = agent_variance.batch_MCE()
 
@@ -141,9 +184,9 @@ def run_experiment(args):
 
 if __name__ == "__main__":
 
-    grid_sizes = [2 * i + 1 for i in range(2, 21, 3)]
-    horizons = [2 * s + 2 for s in grid_sizes]
-    runs = 3
+    grid_sizes = [5,7,9,11,13,17]#[2 * i + 1 for i in range(2, 21, 3)]
+    horizons = [2 * s + 2 for s in grid_sizes] + [48, 60, 72]
+    runs = 5
 
     tasks = []
     for grid_size in grid_sizes:
