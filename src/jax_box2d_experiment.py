@@ -6,6 +6,9 @@ SB3-based ApproximateLearner. Supports DQN (discrete) and SAC (continuous).
 Optionally runs an MMD learner as a third comparison agent.
 """
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import agents.demonstrator as demonstrator
 from agents.jax_learner import JaxApproximateLearner
 from agents.mmd_learner import MMDLearner

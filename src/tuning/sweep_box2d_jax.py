@@ -7,9 +7,14 @@ Usage:
     python -m tuning.sweep_box2d_jax tuning/configs/box2d/lunarlander_jax.yaml --agent-type variance
 """
 
+import os
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+
 import argparse
 import torch
 import wandb
+import multiprocessing
 import agents.demonstrator as demonstrator
 from environments.box2d_jax_environment import Box2DJaxEnvironment
 from environments.box2d_environment import Box2DEnvironment
@@ -164,8 +169,27 @@ if __name__ == "__main__":
     project = _yaml_config["wandb"]["project"]
 
     sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
-    wandb.agent(
-        sweep_id,
-        function=train,
-        count=_yaml_config["wandb"]["sweep_count"],
-    )
+    # wandb.agent(
+    #     sweep_id,
+    #     function=train,
+    #     count=_yaml_config["wandb"]["sweep_count"],
+    # )
+
+    num_agents = 5
+
+    processes = []
+    for i in range(num_agents):
+        # We use a helper to call wandb.agent in a separate process
+        p = multiprocessing.Process(
+            target=wandb.agent,
+            args=(sweep_id,),
+            kwargs={
+                "function": train,
+                "count": int(_yaml_config["wandb"]["sweep_count"] / num_agents),
+            },  # Each agent does 5 runs
+        )
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join()
