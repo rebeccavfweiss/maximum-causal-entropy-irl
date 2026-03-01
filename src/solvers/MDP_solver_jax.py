@@ -74,7 +74,7 @@ class JaxSolver(MDPSolverApproximation):
         obs_dim = env.observation_space.shape[0]
 
         if self.training_algorithm == "sac":
-            action_dim = env.action_space.shape[0]
+            action_dim = env.action_space.n
             self.trainer = JaxSACTrainer(obs_dim, action_dim, self.training_config)
         else:
             action_dim = env.action_space.n
@@ -107,7 +107,9 @@ class JaxSolverExpectation(JaxSolver):
             experiment_name=experiment_name,
             full_training_timesteps=full_training_timesteps,
             finetune_timesteps=finetune_timesteps,
-            log_dir=str(Path("experiments") / experiment_name / "jax_agent_expectation"),
+            log_dir=str(
+                Path("experiments") / experiment_name / "jax_agent_expectation"
+            ),
             model_dir=str(Path("models") / experiment_name / "jax_agent_expectation"),
         )
 
@@ -144,7 +146,8 @@ class JaxSolverExpectation(JaxSolver):
 
         # Determine training steps
         timesteps = (
-            self.finetune_timesteps if prev_params is not None
+            self.finetune_timesteps
+            if prev_params is not None
             else self.full_training_timesteps
         )
 
@@ -162,8 +165,10 @@ class JaxSolverExpectation(JaxSolver):
         mode = "sac" if self.training_algorithm == "sac" else "dqn"
         network = self.trainer.actor if mode == "sac" else self.trainer.network
         policy = JaxPolicy(
-            result.best_params, network,
-            obs_normalizer=self.obs_normalizer, mode=mode,
+            result.best_params,
+            network,
+            obs_normalizer=self.obs_normalizer,
+            mode=mode,
         )
 
         return policy, result.train_state
@@ -217,6 +222,7 @@ class JaxSolverVariance(JaxSolver):
         policy : JaxPolicy
         train_state : dict for warm-starting
         """
+
         # Combined reward: r(s) = reward(s) + variance(s)
         def combined_reward(s):
             s_flat = s.flatten()
@@ -230,7 +236,8 @@ class JaxSolverVariance(JaxSolver):
             self._create_trainer(gym_env)
 
         timesteps = (
-            self.finetune_timesteps if prev_params is not None
+            self.finetune_timesteps
+            if prev_params is not None
             else self.full_training_timesteps
         )
 
@@ -247,8 +254,10 @@ class JaxSolverVariance(JaxSolver):
         mode = "sac" if self.training_algorithm == "sac" else "dqn"
         network = self.trainer.actor if mode == "sac" else self.trainer.network
         policy = JaxPolicy(
-            result.best_params, network,
-            obs_normalizer=self.obs_normalizer, mode=mode,
+            result.best_params,
+            network,
+            obs_normalizer=self.obs_normalizer,
+            mode=mode,
         )
 
         return policy, result.train_state

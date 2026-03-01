@@ -23,7 +23,7 @@ sweep:
   parameters:
     # Algorithm selection
     training_algorithm:
-      values: ["dqn", "sac"]
+      value: "dqn"
     # Warm-starting config
     full_training_timesteps:
       values: [100000, 200000]

@@ -86,7 +86,8 @@ def train():
             "tau": getattr(sweep_cfg, "tau", 0.005),
             "train_freq": getattr(sweep_cfg, "train_freq", 4),
             "eval_freq": 5000,
-            "epsilon_decay_fraction": 1.0 / (1.0 + 1.0 / max(getattr(sweep_cfg, "epsilon_decay", 0.999), 0.9)),
+            "epsilon_decay_fraction": 1.0
+            / (1.0 + 1.0 / max(getattr(sweep_cfg, "epsilon_decay", 0.999), 0.9)),
         }
 
         full_training_timesteps = getattr(sweep_cfg, "full_training_timesteps", 200_000)
