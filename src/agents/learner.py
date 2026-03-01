@@ -217,7 +217,7 @@ class Learner(Agent):
             theta_v = torch.zeros(
                 (self.env.n_features, self.env.n_features), requires_grad=True
             )
-            if optimizer_e is None:
+            if self.optimizer_v is None:
                 optimizer_v = torch.optim.Adam([theta_v], lr=1.0, eps=1e-7)
             else:
                 optimizer_v = self.optimizer_v([theta_v], **self.optimizer_v_kwargs)
@@ -280,7 +280,10 @@ class Learner(Agent):
                 optimizer_e.zero_grad()
                 theta_e.grad = grad_e
                 optimizer_e.step()
-                scheduler_e.step()
+                if isinstance(scheduler_e, ReduceLROnPlateau):
+                    scheduler_e.step(theta_e_diff)
+                else:
+                    scheduler_e.step()
 
                 # Clamp values (optional, depending on your upper bounds)
                 with torch.no_grad():
