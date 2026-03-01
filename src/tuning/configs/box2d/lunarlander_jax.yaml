@@ -1,0 +1,89 @@
+environment:
+  type: box2d_jax
+  env_id: "LunarLander-v3"
+  T: 800
+  gamma: 0.99
+  continuous: false
+  n_trajectories_eval: 500
+  hugging_face_repo: "Chiz"
+
+demonstrator:
+  training_algorithm: ppo
+  n_trajectories: 500
+
+wandb:
+  project: "mceirl-box2d-jax-tuning"
+  sweep_count: 30
+
+sweep:
+  method: bayes
+  metric:
+    name: reward_variance
+    goal: maximize
+  parameters:
+    # Algorithm selection
+    training_algorithm:
+      values: ["dqn", "sac"]
+    # Warm-starting config
+    full_training_timesteps:
+      values: [100000, 200000]
+    finetune_timesteps:
+      values: [2000, 5000, 10000]
+    # Shared RL config
+    hidden_dims:
+      values: [[64, 64], [128, 128], [256, 256]]
+    rl_batch_size:
+      values: [32, 64, 128]
+    tau:
+      values: [0.001, 0.005, 0.01]
+    buffer_size:
+      values: [25000, 50000, 100000]
+    train_freq:
+      values: [3, 5, 10]
+    # DQN-specific
+    dqn_lr:
+      distribution: log_uniform_values
+      min: 0.0001
+      max: 0.005
+    epsilon_decay:
+      values: [0.995, 0.999, 0.9995]
+    # SAC-specific
+    actor_lr:
+      distribution: log_uniform_values
+      min: 0.0001
+      max: 0.003
+    critic_lr:
+      distribution: log_uniform_values
+      min: 0.0001
+      max: 0.003
+    init_alpha:
+      values: [0.1, 0.2, 1.0]
+    # IRL learner convergence (shared)
+    tol_exp:
+      values: [0.0001, 0.0005, 0.001]
+    maxiter:
+      values: [300, 500, 750]
+    miniter:
+      value: 1
+    n_trajectories:
+      value: 500
+    # IRL optimizer config (shared - theta_e)
+    lr_e:
+      distribution: log_uniform_values
+      min: 0.005
+      max: 0.3
+    lr_decay_rate:
+      values: [0.9, 0.95, 0.975]
+    # Variance-only params (removed for expectation sweeps)
+    tol_var:
+      values: [0.005, 0.0125, 0.025]
+    lr_v:
+      distribution: log_uniform_values
+      min: 0.005
+      max: 0.1
+    lr_decay_rate_v:
+      values: [0.9, 0.95, 0.975]
+    alternate_every:
+      values: [null, 10, 25, 50]
+    var_factor:
+      values: [2, 3, 4, 5]

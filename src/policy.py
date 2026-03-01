@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import numpy as np
 from stable_baselines3 import PPO
+import jax.numpy as jnp
 
 
 class Policy(ABC):
@@ -83,3 +84,43 @@ class ModelPolicy(Policy):
         """
 
         return self.model.predict(obs, deterministic=True)[0]
+
+
+class JaxPolicy(Policy):
+    """
+    Wraps JAX network parameters for inference via the Policy interface.
+    Works for both DQN (discrete) and SAC (continuous) policies.
+
+    Parameters
+    ----------
+    params : Any
+        JAX/Flax network parameters
+    network : nn.Module
+        Flax network module (QNetwork or GaussianActor)
+    obs_normalizer : RunningMeanStd or None
+        Observation normalizer
+    mode : str
+        "dqn" for discrete actions, "sac" for continuous actions
+    """
+
+    def __init__(self, params, network, obs_normalizer=None, mode="dqn"):
+        self.params = params
+        self.network = network
+        self.obs_normalizer = obs_normalizer
+        self.mode = mode
+
+    def predict(self, obs, t: int = None):
+        if isinstance(obs, np.ndarray):
+            obs_jax = jnp.array(obs.flatten(), dtype=jnp.float32)
+        else:
+            obs_jax = jnp.array(obs, dtype=jnp.float32).flatten()
+
+        if self.obs_normalizer is not None:
+            obs_jax = jnp.array(self.obs_normalizer.normalize(np.array(obs_jax)))
+
+        if self.mode == "sac":
+            mean, _ = self.network.apply(self.params, obs_jax)
+            return np.array(jnp.tanh(mean))
+        else:
+            q_values = self.network.apply(self.params, obs_jax)
+            return int(jnp.argmax(q_values))

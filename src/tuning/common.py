@@ -454,3 +454,131 @@ def train_and_evaluate_approximate(
     del agent
     gc.collect()
     log_memory("agent_cleanup")
+
+
+def train_and_evaluate_jax(
+    env,
+    demo_env,
+    demo,
+    agent_type: str,
+    learner_config: dict,
+    training_config: dict,
+    experiment_name: str,
+    training_algorithm: str,
+    full_training_timesteps: int,
+    finetune_timesteps: int,
+    T: int,
+    n_trajectories_eval: int,
+    lr_e: float = 0.1,
+    lr_v: float = 0.05,
+    lr_decay_rate_e: float = 0.95,
+    lr_decay_rate_v: float = 0.9,
+    alternate_every=None,
+    var_factor: int = 2,
+    show: bool = False,
+    store: bool = True,
+) -> None:
+    """
+    Train and evaluate a JAX-based agent with warm-starting.
+
+    Uses JaxApproximateLearner + JaxSolver instead of SB3-based equivalents.
+    """
+    from agents.jax_learner import JaxApproximateLearner
+    from solvers.MDP_solver_jax import JaxSolverExpectation, JaxSolverVariance
+
+    log_memory("start")
+
+    reward_demonstrator = log_demonstrator_metrics(
+        demo_env, demo, n_trajectories_eval, T
+    )
+
+    # Clean up demonstrator policy
+    if hasattr(demo, "policy") and demo.policy is not None:
+        del demo.policy
+    log_memory("demonstrator_policy_cleanup")
+
+    if agent_type == "expectation":
+        agent_name = "AgentExpectation_JAX"
+        solver = JaxSolverExpectation(
+            experiment_name=experiment_name,
+            training_algorithm=training_algorithm,
+            training_config=training_config,
+            T=T,
+            compute_variance=False,
+            full_training_timesteps=full_training_timesteps,
+            finetune_timesteps=finetune_timesteps,
+        )
+        agent = JaxApproximateLearner(
+            env,
+            demo.mu_demonstrator,
+            learner_config,
+            agent_name=agent_name,
+            solver=solver,
+            lr_e=lr_e,
+            lr_decay_rate_e=lr_decay_rate_e,
+        )
+        iters, times = agent.batch_MCE()
+        reward = env.compute_true_reward_for_agent(
+            agent, n_trajectories_eval, T
+        )
+        log_memory("agent_expectation_finished")
+
+        wandb.log(
+            {
+                "reward_expectation": reward,
+                "reward_diff_expectation": np.abs(
+                    reward_demonstrator - reward
+                ),
+                "iterations_expectation": iters,
+                "time_total_expectation": sum(times),
+                "time_avg_per_iter_expectation": np.mean(times),
+            }
+        )
+    else:
+        agent_name = "AgentVariance_JAX"
+        solver = JaxSolverVariance(
+            experiment_name=experiment_name,
+            training_algorithm=training_algorithm,
+            training_config=training_config,
+            T=T,
+            compute_variance=True,
+            full_training_timesteps=full_training_timesteps,
+            finetune_timesteps=finetune_timesteps,
+        )
+        agent = JaxApproximateLearner(
+            env,
+            demo.mu_demonstrator,
+            learner_config,
+            agent_name=agent_name,
+            solver=solver,
+            lr_e=lr_e,
+            lr_v=lr_v,
+            lr_decay_rate_e=lr_decay_rate_e,
+            lr_decay_rate_v=lr_decay_rate_v,
+        )
+        iters, times = agent.batch_MCE(
+            alternate_every=alternate_every, var_factor=var_factor
+        )
+        reward = env.compute_true_reward_for_agent(
+            agent, n_trajectories_eval, T
+        )
+        log_memory("agent_variance_finished")
+
+        wandb.log(
+            {
+                "reward_variance": reward,
+                "reward_diff_variance": np.abs(
+                    reward_demonstrator - reward
+                ),
+                "iterations_variance": iters,
+                "time_total_variance": sum(times),
+                "time_avg_per_iter_variance": np.mean(times),
+            }
+        )
+
+    # Cleanup
+    if hasattr(agent, "policy") and agent.policy is not None:
+        del agent.policy
+    del agent
+    gc.collect()
+    log_memory("agent_cleanup")
