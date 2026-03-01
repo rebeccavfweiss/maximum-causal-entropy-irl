@@ -1,6 +1,6 @@
 environment:
   type: object_world
-  gamma: 1.0
+  gamma: 0.95
   grid_size: 6
   T: 20
   random_start: false
@@ -13,7 +13,7 @@ demonstrator:
 
 wandb:
   project: "mceirl-object-world-tuning"
-  sweep_count: 50
+  sweep_count: 75
 
 sweep:
   method: bayes
@@ -21,11 +21,15 @@ sweep:
     name: reward__diff_variance
     goal: maximize
   parameters:
+    env_gamma:
+      values: [1.0, 0.99, 0.975, 0.95, 0.9]
+    env_T:
+      values: [20, 50, 100]
     # Learner convergence (shared)
     tol_exp:
       values: [0.001, 0.005, 0.01]
     maxiter:
-      value: 1500
+      value: 2500
     miniter:
       value: 1
     # Optimizer config (shared - theta_e)
