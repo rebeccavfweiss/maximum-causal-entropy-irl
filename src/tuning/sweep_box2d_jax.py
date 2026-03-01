@@ -15,7 +15,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import argparse
 import torch
 import wandb
-import multiprocessing
 import agents.demonstrator as demonstrator
 from environments.box2d_jax_environment import Box2DJaxEnvironment
 from environments.box2d_environment import Box2DEnvironment
@@ -168,18 +167,7 @@ def train():
             )
 
 
-def run_agent(sid, yaml_cfg, agent_type, count):
-    """Worker that initializes globals in the spawned process."""
-    global _yaml_config, _agent_type
-    _yaml_config = yaml_cfg
-    _agent_type = agent_type
-    wandb.agent(sid, function=train, count=count)
-
-
 if __name__ == "__main__":
-    # Use 'spawn' so each child process gets a fresh CUDA context
-    multiprocessing.set_start_method("spawn", force=True)
-
     parser = argparse.ArgumentParser(
         description="Hyperparameter sweep for JAX-based Box2D environments"
     )
@@ -191,10 +179,15 @@ if __name__ == "__main__":
         help="Which agent type to optimize",
     )
     parser.add_argument(
-        "--num-agents",
+        "--sweep-id",
+        default=None,
+        help="Existing sweep ID to join (for parallel agents in separate terminals)",
+    )
+    parser.add_argument(
+        "--count",
         type=int,
-        default=5,
-        help="Number of parallel sweep agents",
+        default=None,
+        help="Number of runs for this agent (default: sweep_count from config)",
     )
     args = parser.parse_args()
 
@@ -204,19 +197,14 @@ if __name__ == "__main__":
     adjusted_sweep = prepare_sweep_config(_yaml_config["sweep"], _agent_type)
     project = _yaml_config["wandb"]["project"]
 
-    sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
+    if args.sweep_id:
+        sweep_id = args.sweep_id
+    else:
+        sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
+        print(f"Created sweep: {sweep_id}")
+        print(f"To add parallel agents, run in other terminals:")
+        print(f"  python -m tuning.sweep_box2d_jax {args.config} "
+              f"--agent-type {_agent_type} --sweep-id {sweep_id}")
 
-    num_agents = args.num_agents
-    count_per_agent = max(1, int(_yaml_config["wandb"]["sweep_count"] / num_agents))
-
-    processes = []
-    for i in range(num_agents):
-        p = multiprocessing.Process(
-            target=run_agent,
-            args=(sweep_id, _yaml_config, _agent_type, count_per_agent),
-        )
-        p.start()
-        processes.append(p)
-
-    for p in processes:
-        p.join()
+    count = args.count or _yaml_config["wandb"]["sweep_count"]
+    wandb.agent(sweep_id, function=train, count=count, project=f"{project}-{_agent_type}")
