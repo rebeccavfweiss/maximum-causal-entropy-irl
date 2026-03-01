@@ -168,6 +168,14 @@ def train():
             )
 
 
+def run_agent(sid, yaml_cfg, agent_type, count):
+    """Worker that initializes globals in the spawned process."""
+    global _yaml_config, _agent_type
+    _yaml_config = yaml_cfg
+    _agent_type = agent_type
+    wandb.agent(sid, function=train, count=count)
+
+
 if __name__ == "__main__":
     # Use 'spawn' so each child process gets a fresh CUDA context
     multiprocessing.set_start_method("spawn", force=True)
@@ -200,13 +208,6 @@ if __name__ == "__main__":
 
     num_agents = args.num_agents
     count_per_agent = max(1, int(_yaml_config["wandb"]["sweep_count"] / num_agents))
-
-    def run_agent(sid, yaml_cfg, agent_type, count):
-        """Worker that initializes globals in the spawned process."""
-        global _yaml_config, _agent_type
-        _yaml_config = yaml_cfg
-        _agent_type = agent_type
-        wandb.agent(sid, function=train, count=count)
 
     processes = []
     for i in range(num_agents):
