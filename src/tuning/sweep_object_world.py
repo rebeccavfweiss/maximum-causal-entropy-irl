@@ -42,9 +42,13 @@ def train():
     with wandb.init() as run:
         sweep_cfg = run.config
         env_cfg = _yaml_config["environment"]
+        env_cfg["gamma"] = sweep_cfg["env_gamma"]
+        env_cfg["T"] = sweep_cfg["env_T"]
         demo_cfg = _yaml_config["demonstrator"]
 
         env = create_environment(env_cfg)
+
+        # wandb.log({"env_gamma": env.gamma}) # if not logged -> = 1.
 
         demo = demonstrator.ObjectWorldDemonstrator(
             env,
