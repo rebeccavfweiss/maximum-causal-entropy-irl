@@ -169,6 +169,9 @@ def train():
 
 
 if __name__ == "__main__":
+    # Use 'spawn' so each child process gets a fresh CUDA context
+    multiprocessing.set_start_method("spawn", force=True)
+
     parser = argparse.ArgumentParser(
         description="Hyperparameter sweep for JAX-based Box2D environments"
     )
@@ -179,6 +182,12 @@ if __name__ == "__main__":
         required=True,
         help="Which agent type to optimize",
     )
+    parser.add_argument(
+        "--num-agents",
+        type=int,
+        default=5,
+        help="Number of parallel sweep agents",
+    )
     args = parser.parse_args()
 
     _yaml_config = load_config(args.config)
@@ -188,24 +197,19 @@ if __name__ == "__main__":
     project = _yaml_config["wandb"]["project"]
 
     sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
-    # wandb.agent(
-    #     sweep_id,
-    #     function=train,
-    #     count=_yaml_config["wandb"]["sweep_count"],
-    # )
 
-    num_agents = 5
+    num_agents = args.num_agents
+    count_per_agent = max(1, int(_yaml_config["wandb"]["sweep_count"] / num_agents))
 
     processes = []
     for i in range(num_agents):
-        # We use a helper to call wandb.agent in a separate process
         p = multiprocessing.Process(
             target=wandb.agent,
             args=(sweep_id,),
             kwargs={
                 "function": train,
-                "count": int(_yaml_config["wandb"]["sweep_count"] / num_agents),
-            },  # Each agent does 5 runs
+                "count": count_per_agent,
+            },
         )
         p.start()
         processes.append(p)
