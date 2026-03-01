@@ -74,7 +74,7 @@ sweep:
       max: 0.3
     lr_decay_rate:
       values: [0.9, 0.95, 0.975]
-    # Variance-only params (removed for expectation sweeps)
+    # Variance-only params (removed for expectation and mmd sweeps)
     tol_var:
       values: [0.005, 0.0125, 0.025]
     lr_v:
@@ -87,3 +87,8 @@ sweep:
       values: [null, 10, 25, 50]
     var_factor:
       values: [2, 3, 4, 5]
+    # MMD-only params (removed for expectation and variance sweeps)
+    kernel_bandwidth:
+      values: [null, 0.5, 1.0, 2.0]
+    tol_mmd:
+      values: [0.001, 0.005, 0.01, 0.05]

@@ -47,6 +47,30 @@ VARIANCE_ONLY_PARAMS = {
     "var_factor",
 }
 
+# Parameters that only apply to the MMD agent
+MMD_ONLY_PARAMS = {
+    "tol_mmd",
+    "kernel_bandwidth",
+}
+
+# Parameters that only apply to expectation/variance (not MMD)
+MOMENT_MATCHING_ONLY_PARAMS = {
+    "tol_exp",
+    "optimizer_type_e",
+    "lr_e",
+    "weight_decay_e",
+    "lr_scheduler_e",
+    "lr_decay_rate",
+    "tol_var",
+    "optimizer_type_v",
+    "lr_v",
+    "weight_decay_v",
+    "lr_scheduler_v",
+    "lr_decay_rate_v",
+    "alternate_every",
+    "var_factor",
+}
+
 
 def load_config(yaml_path: str) -> dict:
     """Load and return the full YAML config as a dict."""
@@ -59,17 +83,24 @@ def prepare_sweep_config(sweep_config_from_yaml: dict, agent_type: str) -> dict:
     Adjust the raw sweep config from YAML based on agent_type.
 
     For "expectation": sets metric to reward_diff_expectation, removes
-    variance-only params from the search space.
-    For "variance": sets metric to reward_diff_variance, keeps all params.
+    variance-only and MMD-only params from the search space.
+    For "variance": sets metric to reward_diff_variance, removes MMD-only params.
+    For "mmd": sets metric to reward_diff_mmd, removes moment-matching-only params.
     """
     config = copy.deepcopy(sweep_config_from_yaml)
 
     if agent_type == "expectation":
         config["metric"] = {"name": "reward_diff_expectation", "goal": "maximize"}
-        for param in VARIANCE_ONLY_PARAMS:
+        for param in VARIANCE_ONLY_PARAMS | MMD_ONLY_PARAMS:
             config["parameters"].pop(param, None)
-    else:
+    elif agent_type == "variance":
         config["metric"] = {"name": "reward_diff_variance", "goal": "maximize"}
+        for param in MMD_ONLY_PARAMS:
+            config["parameters"].pop(param, None)
+    elif agent_type == "mmd":
+        config["metric"] = {"name": "reward_diff_mmd", "goal": "maximize"}
+        for param in MOMENT_MATCHING_ONLY_PARAMS:
+            config["parameters"].pop(param, None)
 
     return config
 
@@ -151,11 +182,18 @@ def build_optimizer_config(sweep_config, agent_type: str) -> dict:
 
 def build_learner_config(sweep_config, agent_type: str) -> dict:
     """Build the config_agent dict for Learner from sweep params."""
-    config = {
-        "tol_exp": sweep_config.tol_exp,
-        "maxiter": sweep_config.maxiter,
-        "miniter": getattr(sweep_config, "miniter", 1),
-    }
+    if agent_type == "mmd":
+        config = {
+            "tol_exp": 1.0,  # not used by MMD, but required by parent
+            "maxiter": sweep_config.maxiter,
+            "miniter": getattr(sweep_config, "miniter", 1),
+        }
+    else:
+        config = {
+            "tol_exp": sweep_config.tol_exp,
+            "maxiter": sweep_config.maxiter,
+            "miniter": getattr(sweep_config, "miniter", 1),
+        }
 
     if hasattr(sweep_config, "n_trajectories"):
         config["n_trajectories"] = sweep_config.n_trajectories
@@ -580,4 +618,113 @@ def train_and_evaluate_jax(
         del agent.policy
     del agent
     gc.collect()
-    log_memory("agent_cleanup")
+    log_memory("agent_jax_cleanup")
+
+
+def train_and_evaluate_mmd(
+    env,
+    demo_env,
+    demo,
+    learner_config: dict,
+    training_config: dict,
+    experiment_name: str,
+    training_algorithm: str,
+    full_training_timesteps: int,
+    finetune_timesteps: int,
+    T: int,
+    n_trajectories_eval: int,
+    kernel_bandwidth: float = None,
+    tol_mmd: float = 0.01,
+    show: bool = False,
+    store: bool = True,
+) -> None:
+    """
+    Train and evaluate an MMD-based JAX agent.
+
+    Collects expert trajectory features from the demonstrator, then uses
+    MMDLearner with the MMD witness function as reward.
+    """
+    from agents.mmd_learner import MMDLearner
+    from solvers.MDP_solver_jax import JaxSolverExpectation
+
+    log_memory("start")
+
+    reward_demonstrator = log_demonstrator_metrics(
+        demo_env, demo, n_trajectories_eval, T
+    )
+
+    # Collect expert trajectory features for MMD
+    expert_solver = JaxSolverExpectation(
+        experiment_name=experiment_name + "_expert_features",
+        training_algorithm=training_algorithm,
+        training_config=training_config,
+        T=T,
+        compute_variance=False,
+        full_training_timesteps=full_training_timesteps,
+        finetune_timesteps=finetune_timesteps,
+    )
+    n_traj = learner_config.get("n_trajectories", 100)
+    expert_features = []
+    for _ in range(n_traj):
+        trajectory = expert_solver.generate_episode(env, demo.policy, T)
+        if len(trajectory) == 0:
+            expert_features.append(
+                np.zeros(env.n_features, dtype=np.float32)
+            )
+            continue
+        feat_sum = trajectory[0][0].flatten().astype(np.float32)
+        for i in range(len(trajectory)):
+            feat_sum += (
+                env.gamma ** (i + 1)
+                * trajectory[i][2].flatten().astype(np.float32)
+            )
+        expert_features.append(feat_sum)
+    expert_features = np.array(expert_features)
+
+    # Clean up demonstrator policy
+    if hasattr(demo, "policy") and demo.policy is not None:
+        del demo.policy
+    log_memory("demonstrator_policy_cleanup")
+
+    agent_name = "AgentMMD_JAX"
+    solver = JaxSolverExpectation(
+        experiment_name=experiment_name,
+        training_algorithm=training_algorithm,
+        training_config=training_config,
+        T=T,
+        compute_variance=False,
+        full_training_timesteps=full_training_timesteps,
+        finetune_timesteps=finetune_timesteps,
+    )
+    agent = MMDLearner(
+        env,
+        demo.mu_demonstrator,
+        learner_config,
+        agent_name=agent_name,
+        solver=solver,
+        expert_features=expert_features,
+        kernel_bandwidth=kernel_bandwidth,
+        tol_mmd=tol_mmd,
+    )
+    iters, times = agent.batch_MCE()
+    reward = env.compute_true_reward_for_agent(
+        agent, n_trajectories_eval, T
+    )
+    log_memory("agent_mmd_finished")
+
+    wandb.log(
+        {
+            "reward_mmd": reward,
+            "reward_diff_mmd": np.abs(reward_demonstrator - reward),
+            "iterations_mmd": iters,
+            "time_total_mmd": sum(times),
+            "time_avg_per_iter_mmd": np.mean(times),
+        }
+    )
+
+    # Cleanup
+    if hasattr(agent, "policy") and agent.policy is not None:
+        del agent.policy
+    del agent
+    gc.collect()
+    log_memory("agent_mmd_cleanup")

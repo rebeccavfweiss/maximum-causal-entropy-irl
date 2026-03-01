@@ -5,6 +5,7 @@ Uses JaxApproximateLearner + JaxSolver with warm-starting.
 Usage:
     python -m tuning.sweep_box2d_jax tuning/configs/box2d/lunarlander_jax.yaml --agent-type expectation
     python -m tuning.sweep_box2d_jax tuning/configs/box2d/lunarlander_jax.yaml --agent-type variance
+    python -m tuning.sweep_box2d_jax tuning/configs/box2d/lunarlander_jax.yaml --agent-type mmd
 """
 
 import os
@@ -25,6 +26,7 @@ from tuning.common import (
     build_learner_config,
     log_memory,
     train_and_evaluate_jax,
+    train_and_evaluate_mmd,
 )
 
 _yaml_config = None
@@ -127,26 +129,43 @@ def train():
 
         learner_config = build_learner_config(sweep_cfg, _agent_type)
 
-        train_and_evaluate_jax(
-            env=env,
-            demo_env=demo_env,
-            demo=demo,
-            agent_type=_agent_type,
-            learner_config=learner_config,
-            training_config=training_config,
-            experiment_name=experiment_name,
-            training_algorithm=training_algorithm,
-            full_training_timesteps=full_training_timesteps,
-            finetune_timesteps=finetune_timesteps,
-            T=env_cfg["T"],
-            n_trajectories_eval=env_cfg.get("n_trajectories_eval", 500),
-            lr_e=getattr(sweep_cfg, "lr_e", 0.1),
-            lr_v=getattr(sweep_cfg, "lr_v", 0.05),
-            lr_decay_rate_e=getattr(sweep_cfg, "lr_decay_rate", 0.95),
-            lr_decay_rate_v=getattr(sweep_cfg, "lr_decay_rate_v", 0.9),
-            alternate_every=getattr(sweep_cfg, "alternate_every", None),
-            var_factor=getattr(sweep_cfg, "var_factor", 2),
-        )
+        if _agent_type == "mmd":
+            train_and_evaluate_mmd(
+                env=env,
+                demo_env=demo_env,
+                demo=demo,
+                learner_config=learner_config,
+                training_config=training_config,
+                experiment_name=experiment_name,
+                training_algorithm=training_algorithm,
+                full_training_timesteps=full_training_timesteps,
+                finetune_timesteps=finetune_timesteps,
+                T=env_cfg["T"],
+                n_trajectories_eval=env_cfg.get("n_trajectories_eval", 500),
+                kernel_bandwidth=getattr(sweep_cfg, "kernel_bandwidth", None),
+                tol_mmd=getattr(sweep_cfg, "tol_mmd", 0.01),
+            )
+        else:
+            train_and_evaluate_jax(
+                env=env,
+                demo_env=demo_env,
+                demo=demo,
+                agent_type=_agent_type,
+                learner_config=learner_config,
+                training_config=training_config,
+                experiment_name=experiment_name,
+                training_algorithm=training_algorithm,
+                full_training_timesteps=full_training_timesteps,
+                finetune_timesteps=finetune_timesteps,
+                T=env_cfg["T"],
+                n_trajectories_eval=env_cfg.get("n_trajectories_eval", 500),
+                lr_e=getattr(sweep_cfg, "lr_e", 0.1),
+                lr_v=getattr(sweep_cfg, "lr_v", 0.05),
+                lr_decay_rate_e=getattr(sweep_cfg, "lr_decay_rate", 0.95),
+                lr_decay_rate_v=getattr(sweep_cfg, "lr_decay_rate_v", 0.9),
+                alternate_every=getattr(sweep_cfg, "alternate_every", None),
+                var_factor=getattr(sweep_cfg, "var_factor", 2),
+            )
 
 
 if __name__ == "__main__":
@@ -156,7 +175,7 @@ if __name__ == "__main__":
     parser.add_argument("config", help="Path to YAML config")
     parser.add_argument(
         "--agent-type",
-        choices=["expectation", "variance"],
+        choices=["expectation", "variance", "mmd"],
         required=True,
         help="Which agent type to optimize",
     )
