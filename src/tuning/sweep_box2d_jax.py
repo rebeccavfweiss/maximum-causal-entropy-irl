@@ -201,15 +201,18 @@ if __name__ == "__main__":
     num_agents = args.num_agents
     count_per_agent = max(1, int(_yaml_config["wandb"]["sweep_count"] / num_agents))
 
+    def run_agent(sid, yaml_cfg, agent_type, count):
+        """Worker that initializes globals in the spawned process."""
+        global _yaml_config, _agent_type
+        _yaml_config = yaml_cfg
+        _agent_type = agent_type
+        wandb.agent(sid, function=train, count=count)
+
     processes = []
     for i in range(num_agents):
         p = multiprocessing.Process(
-            target=wandb.agent,
-            args=(sweep_id,),
-            kwargs={
-                "function": train,
-                "count": count_per_agent,
-            },
+            target=run_agent,
+            args=(sweep_id, _yaml_config, _agent_type, count_per_agent),
         )
         p.start()
         processes.append(p)
