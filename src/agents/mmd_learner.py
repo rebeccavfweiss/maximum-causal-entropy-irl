@@ -149,7 +149,9 @@ class MMDLearner(JaxApproximateLearner):
         """
         bandwidth = self.kernel_bandwidth
         if bandwidth is None:
-            bandwidth = float(self.median_heuristic(self.expert_features, learner_features))
+            bandwidth = float(
+                self.median_heuristic(self.expert_features, learner_features)
+            )
 
         expert_feat = np.array(self.expert_features)
         learner_feat = np.array(learner_features)
@@ -181,21 +183,23 @@ class MMDLearner(JaxApproximateLearner):
         """
         feature_list = []
         for _ in range(n_trajectories):
-            trajectory = self.solver.generate_episode(
-                self.env, self.policy, self.T
-            )
+            trajectory = self.solver.generate_episode(self.env, self.policy, self.T)
             if len(trajectory) == 0:
                 feature_list.append(np.zeros(self.env.n_features, dtype=np.float32))
                 continue
 
             feat_sum = trajectory[0][0].flatten().astype(np.float32)
             for i in range(len(trajectory)):
-                feat_sum += self.env.gamma ** (i + 1) * trajectory[i][2].flatten().astype(np.float32)
+                feat_sum += self.env.gamma ** (i + 1) * trajectory[i][
+                    2
+                ].flatten().astype(np.float32)
             feature_list.append(feat_sum)
 
         return jnp.array(feature_list)
 
-    def batch_MCE(self, **kwargs) -> tuple[int, list[float]]:
+    def batch_MCE(
+        self, early_stop_window: int = 200, **kwargs
+    ) -> tuple[int, list[float]]:
         """
         Modified batch MCE using MMD witness function as reward.
 
@@ -204,6 +208,8 @@ class MMDLearner(JaxApproximateLearner):
         - Reward = witness function (non-parametric)
         - Convergence = MMD^2 < tol_mmd
         - First iteration uses zero reward (random exploration)
+        - Early stopping if MMD^2 trend is non-decreasing over last
+          `early_stop_window` iterations
 
         Returns
         -------
@@ -216,6 +222,7 @@ class MMDLearner(JaxApproximateLearner):
         prev_train_state = None
         learner_features = None
         t = 1
+        mmd_history = []
 
         n_traj = self.n_trajectories or 100
 
@@ -245,27 +252,38 @@ class MMDLearner(JaxApproximateLearner):
             # Compute MMD^2
             bw = self.kernel_bandwidth
             if bw is None:
-                bw = float(self.median_heuristic(self.expert_features, learner_features))
+                bw = float(
+                    self.median_heuristic(self.expert_features, learner_features)
+                )
 
-            mmd_sq = float(self.compute_mmd_squared(
-                self.expert_features, learner_features, bw
-            ))
+            mmd_sq = float(
+                self.compute_mmd_squared(self.expert_features, learner_features, bw)
+            )
 
             end = time()
             runtime.append(end - start)
+            mmd_history.append(mmd_sq)
 
-            wandb.log({
-                f"mmd_squared_{self.agent_name}": mmd_sq,
-                f"step_{self.agent_name}": t,
-                f"kernel_bandwidth_{self.agent_name}": float(bw),
-                f"warm_started_{self.agent_name}": t > 1,
-            })
+            wandb.log(
+                {
+                    f"mmd_squared_{self.agent_name}": mmd_sq,
+                    f"step_{self.agent_name}": t,
+                    f"kernel_bandwidth_{self.agent_name}": float(bw),
+                    f"warm_started_{self.agent_name}": t > 1,
+                }
+            )
 
             # Convergence check
             if mmd_sq < self.tol_mmd and t >= self.miniter:
                 break
             if t >= self.maxiter:
                 break
+
+            # Early stopping: check if MMD^2 is stagnating
+            if t >= self.miniter and t >= early_stop_window:
+                if self._check_stagnation(mmd_history, early_stop_window):
+                    wandb.log({f"early_stopped_{self.agent_name}": True})
+                    break
 
             t += 1
 
@@ -287,10 +305,13 @@ class MMDLearner(JaxApproximateLearner):
         -------
         theta : ndarray
         """
-        all_features = np.concatenate([
-            np.array(self.expert_features),
-            np.array(learner_features),
-        ], axis=0)
+        all_features = np.concatenate(
+            [
+                np.array(self.expert_features),
+                np.array(learner_features),
+            ],
+            axis=0,
+        )
 
         reward_fn, _ = self.compute_witness_reward(learner_features)
         witness_values = np.array([reward_fn(f) for f in all_features])

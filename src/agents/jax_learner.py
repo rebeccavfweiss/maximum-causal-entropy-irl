@@ -98,16 +98,44 @@ class JaxApproximateLearner(ApproximateLearner):
         self._lr_decay_rate_e = lr_decay_rate_e
         self._lr_decay_rate_v = lr_decay_rate_v
 
+    @staticmethod
+    def _check_stagnation(history: list[float], window: int = 200) -> bool:
+        """
+        Check if the loss has stagnated over the last `window` iterations.
+
+        Uses linear regression slope on the log-loss. Returns True if the
+        trend is non-decreasing (i.e., loss is not going down).
+        """
+        if len(history) < window:
+            return False
+        recent = np.array(history[-window:])
+        # Use log to handle scale differences; clamp to avoid log(0)
+        log_vals = np.log(np.maximum(recent, 1e-12))
+        # Simple linear regression: slope of log_vals vs index
+        x = np.arange(window, dtype=np.float64)
+        x_mean = x.mean()
+        slope = np.sum((x - x_mean) * (log_vals - log_vals.mean())) / np.sum(
+            (x - x_mean) ** 2
+        )
+        # Stagnated if slope >= 0 (not decreasing)
+        return slope >= 0.0
+
     def batch_MCE(
-        self, alternate_every: int = None, var_factor: int = 2
+        self,
+        alternate_every: int = None,
+        var_factor: int = 2,
+        early_stop_window: int = 200,
     ) -> tuple[int, list[float]]:
         """
-        Modified batch MCE with warm-starting and optax optimization.
+        Modified batch MCE with warm-starting, optax optimization,
+        and early stopping.
 
         Key changes from parent:
         - solver.soft_value_iteration returns (policy, train_state)
         - train_state is passed back as prev_params for warm-starting
         - Theta optimization uses optax instead of torch
+        - Early stopping: if loss trend is non-decreasing over the last
+          `early_stop_window` iterations, training stops
 
         Returns
         -------
@@ -121,6 +149,10 @@ class JaxApproximateLearner(ApproximateLearner):
 
         theta_e_diff = np.inf
         theta_v_diff = np.inf
+
+        # History for early stopping
+        loss_history_e = []
+        loss_history_v = []
 
         # Initialize theta_e as JAX array
         if self.theta_e is not None and np.any(self.theta_e != 0):
@@ -206,6 +238,11 @@ class JaxApproximateLearner(ApproximateLearner):
             end = time()
             runtime.append(end - start)
 
+            # Track loss history for early stopping
+            loss_history_e.append(theta_e_diff)
+            if calc_theta_v:
+                loss_history_v.append(theta_v_diff)
+
             # Logging
             log_data = {
                 f"step_{self.agent_name}": t,
@@ -229,6 +266,16 @@ class JaxApproximateLearner(ApproximateLearner):
 
             if t >= self.maxiter:
                 break
+
+            # Early stopping: check if loss is stagnating
+            if t >= self.miniter and t >= early_stop_window:
+                e_stagnated = self._check_stagnation(loss_history_e, early_stop_window)
+                v_stagnated = not calc_theta_v or self._check_stagnation(
+                    loss_history_v, early_stop_window
+                )
+                if e_stagnated and v_stagnated:
+                    wandb.log({f"early_stopped_{self.agent_name}": True})
+                    break
 
             t += 1
 

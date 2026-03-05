@@ -1,7 +1,7 @@
 environment:
   type: box2d_jax
   env_id: "LunarLander-v3"
-  T: 800
+  T: 400
   gamma: 0.99
   continuous: false
   n_trajectories_eval: 500
@@ -62,11 +62,11 @@ sweep:
     tol_exp:
       values: [0.0001, 0.0005, 0.001]
     maxiter:
-      values: [300, 500, 750]
+      values: [300, 500, 750, 1000]
     miniter:
       value: 1
     n_trajectories:
-      value: 500
+      value: 50
     # IRL optimizer config (shared - theta_e)
     lr_e:
       distribution: log_uniform_values
