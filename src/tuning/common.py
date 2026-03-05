@@ -728,3 +728,76 @@ def train_and_evaluate_mmd(
     del agent
     gc.collect()
     log_memory("agent_mmd_cleanup")
+
+
+def train_and_evaluate_tabular_mmd(
+    env,
+    demo,
+    learner_config: dict,
+    T: int,
+    n_trajectories_eval: int,
+    kernel_bandwidth: float = None,
+    tol_mmd: float = 0.01,
+    show: bool = False,
+    store: bool = False,
+) -> None:
+    """
+    Train and evaluate a tabular MMD agent using exact MDP solvers.
+
+    Collects expert trajectory features from the demonstrator, then uses
+    TabularMMDLearner with the MMD witness function as per-state reward.
+    """
+    from agents.tabular_mmd_learner import TabularMMDLearner
+
+    reward_demonstrator = log_demonstrator_metrics(
+        env, demo, n_trajectories_eval, T
+    )
+
+    # Collect expert trajectory features
+    expert_solver = MDPSolverExact.MDPSolverExactExpectation(T)
+    n_traj = learner_config.get("n_trajectories", 100)
+    feature_matrix = env.get_state_feature_matrix()
+    expert_features = []
+    for _ in range(n_traj):
+        trajectory = expert_solver.generate_episode(env, demo.policy, T)
+        if len(trajectory) == 0:
+            expert_features.append(
+                np.zeros(env.n_features, dtype=np.float32)
+            )
+            continue
+        feat_sum = feature_matrix[trajectory[0][0]].astype(np.float32)
+        for i in range(len(trajectory)):
+            feat_sum += (
+                env.gamma ** (i + 1)
+                * feature_matrix[trajectory[i][2]].astype(np.float32)
+            )
+        expert_features.append(feat_sum)
+    expert_features = np.array(expert_features)
+
+    agent_name = "AgentMMD_Tabular"
+    solver = MDPSolverExact.MDPSolverExactExpectation(T)
+    agent = TabularMMDLearner(
+        env,
+        demo.mu_demonstrator,
+        learner_config,
+        agent_name=agent_name,
+        solver=solver,
+        expert_features=expert_features,
+        kernel_bandwidth=kernel_bandwidth,
+        tol_mmd=tol_mmd,
+    )
+    iters, times = agent.batch_MCE()
+    agent.compute_and_draw(show, store, 10)
+    reward = env.compute_true_reward_for_agent(
+        agent, n_trajectories_eval, T
+    )
+
+    wandb.log(
+        {
+            "reward_mmd": reward,
+            "reward_diff_mmd": reward - reward_demonstrator,
+            "iterations_mmd": iters,
+            "time_total_mmd": sum(times),
+            "time_avg_per_iter_mmd": np.mean(times),
+        }
+    )
