@@ -155,6 +155,7 @@ def train():
             solver=demo_solver,
             policy_kwargs=policy_kwargs,
             time_steps=demo_cfg.get("time_steps", 7_500_000),
+            policy_type="CnnPolicy",
         )
         log_memory("demonstrator_creation")
 

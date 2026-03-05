@@ -318,10 +318,12 @@ class ContinuousDemonstrator(Demonstrator):
         time_steps: int = 1_500_000,
         policy_kwargs: dict = None,
         hugging_face_repo: str = None,
+        policy_type: str = "MlpPolicy",
     ):
         super().__init__(env, demonstrator_name, T, n_trajectories, solver)
 
         self.training_algorithm = training_algorithm
+        self.policy_type = policy_type
         if training_algorithm == "ppo":
             self.model_path = Path("models") / solver.experiment_name / "ppo"
         else:
@@ -373,21 +375,23 @@ class ContinuousDemonstrator(Demonstrator):
 
             if self.training_algorithm == "ppo":
                 model = PPO(
-                    "MlpPolicy", self.env.env, verbose=0, policy_kwargs=policy_kwargs
+                    self.policy_type, self.env.env, verbose=0, policy_kwargs=policy_kwargs
                 )
             else:
                 model = DQN(
-                    "MlpPolicy",
+                    self.policy_type,
                     self.env.env,
                     verbose=0,
                     buffer_size=250000,
                     policy_kwargs=policy_kwargs,
                 )
 
+            eval_env = model.get_env()
+
             callback = CallbackList(
                 [
                     TimedEvalCallback(
-                        self.env.env_val,
+                        eval_env,
                         best_model_save_path=self.model_path,
                         log_path=self.log_dir,
                         eval_freq=15_000,
