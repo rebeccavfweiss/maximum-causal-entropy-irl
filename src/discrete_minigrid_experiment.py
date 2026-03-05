@@ -1,3 +1,13 @@
+"""
+Discrete MiniGrid experiment runner.
+
+Runs TabularLearner (expectation + variance) across multiple grid sizes and horizons.
+Uses shared utilities from tuning.common for consistency with sweep scripts.
+
+Usage:
+    python -m discrete_minigrid_experiment
+"""
+
 import agents.learner as learner
 import agents.demonstrator as demonstrator
 from environments.discrete_minigrid_environment import CrossingMiniGridEnvironment
@@ -87,8 +97,6 @@ def run_experiment(args):
     optimizer_kwargs = {"lr":0.36566080092610687, "weight_decay":0}
     optimizer_e_kwargs = {"lr": 0.10960901467727942, "weight_decay":0.001}
     optimizer_v_kwargs = {"lr": 0.1763988117457932, "eps": 1e-7, "weight_decay": 0}
-    alternate_every = 50
-    var_factor = 5
 
     # Create the environment, learner, demonstrator, etc
     env = create_minigrid_env(grid_size)
@@ -128,6 +136,7 @@ def run_experiment(args):
     wandb.log(
         {
             "reward_expectation": reward_expectation,
+            "reward_diff_expectation": reward_expectation - reward_demonstrator,
             "iterations_expectation": iter_expectation,
             "time_total_expectation": sum(time_expectation),
             "time_avg_per_iter_expectation": np.mean(time_expectation),
@@ -142,12 +151,6 @@ def run_experiment(args):
         config_default_learner,
         agent_name="AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
-        # learning_rate_e=learning_rate_e,
-        # learning_rate_v=learning_rate_v,
-        # optimizer_e=optimizer_e,
-        # optimizer_v=optimizer_v,
-        # optimizer_e_kwargs=optimizer_e_kwargs,
-        # optimizer_v_kwargs=optimizer_v_kwargs,
     )
     iter_variance, time_variance = agent_variance.batch_MCE()
 
@@ -155,6 +158,7 @@ def run_experiment(args):
     wandb.log(
         {
             "reward_variance": reward_variance,
+            "reward_diff_variance": reward_variance - reward_demonstrator,
             "iterations_variance": iter_variance,
             "time_total_variance": sum(time_variance),
             "time_avg_per_iter_variance": np.mean(time_variance),
@@ -184,7 +188,7 @@ def run_experiment(args):
 
 if __name__ == "__main__":
 
-    grid_sizes = [5,7,9,11,13,17]#[2 * i + 1 for i in range(2, 21, 3)]
+    grid_sizes = [5,7,9,11,13,17]
     horizons = [2 * s + 2 for s in grid_sizes] + [48, 60, 72]
     runs = 5
 

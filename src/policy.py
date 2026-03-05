@@ -103,24 +103,33 @@ class JaxPolicy(Policy):
         "dqn" for discrete actions, "sac" for continuous actions
     """
 
-    def __init__(self, params, network, obs_normalizer=None, mode="dqn"):
+    def __init__(self, params, network, obs_normalizer=None, mode="dqn", use_cnn=False):
         self.params = params
         self.network = network
         self.obs_normalizer = obs_normalizer
         self.mode = mode
+        self.use_cnn = use_cnn
 
     def predict(self, obs, t: int = None):
-        if isinstance(obs, np.ndarray):
-            obs_jax = jnp.array(obs.flatten(), dtype=jnp.float32)
+        if self.use_cnn:
+            # Keep spatial shape, add batch dim: (H, W, C) -> (1, H, W, C)
+            obs_jax = jnp.array(obs, dtype=jnp.float32)[None]
         else:
-            obs_jax = jnp.array(obs, dtype=jnp.float32).flatten()
+            if isinstance(obs, np.ndarray):
+                obs_jax = jnp.array(obs.flatten(), dtype=jnp.float32)
+            else:
+                obs_jax = jnp.array(obs, dtype=jnp.float32).flatten()
 
-        if self.obs_normalizer is not None:
-            obs_jax = jnp.array(self.obs_normalizer.normalize(np.array(obs_jax)))
+            if self.obs_normalizer is not None:
+                obs_jax = jnp.array(self.obs_normalizer.normalize(np.array(obs_jax)))
 
         if self.mode == "sac":
             mean, _ = self.network.apply(self.params, obs_jax)
+            if self.use_cnn:
+                mean = mean[0]
             return np.array(jnp.tanh(mean))
         else:
             q_values = self.network.apply(self.params, obs_jax)
+            if self.use_cnn:
+                q_values = q_values[0]
             return int(jnp.argmax(q_values))

@@ -3,6 +3,8 @@ JAX-based RL implementations: DQN (discrete) and SAC (continuous).
 
 Both trainers support warm-starting from previous parameters,
 enabling efficient fine-tuning across IRL outer-loop iterations.
+
+Supports both flat (MLP) and image (CNN) observations.
 """
 
 import jax
@@ -21,21 +23,27 @@ import gymnasium as gym
 
 
 class ReplayBuffer:
-    """Simple numpy-backed circular replay buffer."""
+    """Simple numpy-backed circular replay buffer supporting flat and image obs."""
 
-    def __init__(self, capacity: int, obs_dim: int, action_dim: int = 1, continuous: bool = False):
+    def __init__(
+        self,
+        capacity: int,
+        obs_shape: tuple,
+        action_dim: int = 1,
+        continuous: bool = False,
+    ):
         self.capacity = capacity
         self.pos = 0
         self.size = 0
         self.continuous = continuous
 
-        self.obs = np.zeros((capacity, obs_dim), dtype=np.float32)
+        self.obs = np.zeros((capacity, *obs_shape), dtype=np.float32)
         if continuous:
             self.actions = np.zeros((capacity, action_dim), dtype=np.float32)
         else:
             self.actions = np.zeros((capacity,), dtype=np.int32)
         self.rewards = np.zeros((capacity,), dtype=np.float32)
-        self.next_obs = np.zeros((capacity, obs_dim), dtype=np.float32)
+        self.next_obs = np.zeros((capacity, *obs_shape), dtype=np.float32)
         self.dones = np.zeros((capacity,), dtype=np.float32)
 
     def add(self, obs, action, reward, next_obs, done):
@@ -98,6 +106,86 @@ class RunningMeanStd:
 
 
 # ============================================================================
+# CNN Feature Extractor (for image observations like MiniGrid)
+# ============================================================================
+
+
+class CNNFeatureExtractor(nn.Module):
+    """CNN backbone for image observations. Mirrors the PyTorch DynamicMiniGridExtractor."""
+    features_dim: int = 128
+
+    @nn.compact
+    def __call__(self, x):
+        # x shape: (batch, H, W, C) — Flax uses channels-last by default
+        x = nn.Conv(features=16, kernel_size=(5, 5), strides=(1, 1), padding="SAME")(x)
+        x = nn.relu(x)
+        x = nn.Conv(features=32, kernel_size=(3, 3), strides=(1, 1), padding="SAME")(x)
+        x = nn.relu(x)
+        x = x.reshape((x.shape[0], -1))  # flatten spatial dims
+        x = nn.Dense(self.features_dim)(x)
+        x = nn.relu(x)
+        return x
+
+
+class CNNQNetwork(nn.Module):
+    """Q-network with CNN feature extractor for image observations."""
+    action_dim: int
+    features_dim: int = 128
+    hidden_dims: tuple[int, ...] = (64, 64)
+
+    @nn.compact
+    def __call__(self, x):
+        x = CNNFeatureExtractor(features_dim=self.features_dim)(x)
+        for dim in self.hidden_dims:
+            x = nn.Dense(dim)(x)
+            x = nn.relu(x)
+        return nn.Dense(self.action_dim)(x)
+
+
+class CNNGaussianActor(nn.Module):
+    """Gaussian policy with CNN feature extractor for image observations."""
+    action_dim: int
+    features_dim: int = 128
+    hidden_dims: tuple[int, ...] = (256, 256)
+
+    @nn.compact
+    def __call__(self, x):
+        x = CNNFeatureExtractor(features_dim=self.features_dim)(x)
+        for dim in self.hidden_dims:
+            x = nn.Dense(dim)(x)
+            x = nn.relu(x)
+        mean = nn.Dense(self.action_dim)(x)
+        log_std = nn.Dense(self.action_dim)(x)
+        log_std = jnp.clip(log_std, -20.0, 2.0)
+        return mean, log_std
+
+
+class CNNTwinQNetwork(nn.Module):
+    """Twin Q-networks with CNN feature extractor for image observations (SAC)."""
+    features_dim: int = 128
+    hidden_dims: tuple[int, ...] = (256, 256)
+
+    @nn.compact
+    def __call__(self, obs, action):
+        features = CNNFeatureExtractor(features_dim=self.features_dim)(obs)
+        x = jnp.concatenate([features, action], axis=-1)
+
+        q1 = x
+        for dim in self.hidden_dims:
+            q1 = nn.Dense(dim)(q1)
+            q1 = nn.relu(q1)
+        q1 = nn.Dense(1)(q1)
+
+        q2 = x
+        for dim in self.hidden_dims:
+            q2 = nn.Dense(dim)(q2)
+            q2 = nn.relu(q2)
+        q2 = nn.Dense(1)(q2)
+
+        return q1.squeeze(-1), q2.squeeze(-1)
+
+
+# ============================================================================
 # DQN
 # ============================================================================
 
@@ -122,16 +210,17 @@ class JaxDQNTrainer:
     Parameters
     ----------
     obs_dim : int
-        Observation space dimension
+        Observation space dimension (flat). Ignored if obs_shape is provided.
     action_dim : int
         Number of discrete actions
     config : dict
         Training hyperparameters
+    obs_shape : tuple or None
+        Full observation shape. If len > 1, uses CNN network.
     """
 
-    def __init__(self, obs_dim: int, action_dim: int, config: dict = None):
+    def __init__(self, obs_dim: int, action_dim: int, config: dict = None, obs_shape: tuple = None):
         config = config or {}
-        self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.gamma = config.get("gamma", 0.99)
         self.tau = config.get("tau", 0.005)
@@ -143,15 +232,29 @@ class JaxDQNTrainer:
         self.hidden_dims = tuple(config.get("hidden_dims", (64, 64)))
         self.eval_freq = config.get("eval_freq", 5000)
         self.n_eval_episodes = config.get("n_eval_episodes", 5)
+        self.features_dim = config.get("features_dim", 128)
 
         # Epsilon schedule params
         self.epsilon_start = config.get("epsilon_start", 1.0)
         self.epsilon_end = config.get("epsilon_end", 0.05)
         self.epsilon_decay_fraction = config.get("epsilon_decay_fraction", 0.5)
-        # For warm-start: use low fixed epsilon
         self.warmstart_epsilon = config.get("warmstart_epsilon", 0.1)
 
-        self.network = QNetwork(action_dim=action_dim, hidden_dims=self.hidden_dims)
+        # Determine observation shape and network type
+        if obs_shape is not None and len(obs_shape) > 1:
+            self.obs_shape = obs_shape
+            self.use_cnn = True
+            self.obs_dim = int(np.prod(obs_shape))
+            self.network = CNNQNetwork(
+                action_dim=action_dim,
+                features_dim=self.features_dim,
+                hidden_dims=self.hidden_dims,
+            )
+        else:
+            self.obs_shape = (obs_dim,) if obs_shape is None else obs_shape
+            self.use_cnn = False
+            self.obs_dim = obs_dim
+            self.network = QNetwork(action_dim=action_dim, hidden_dims=self.hidden_dims)
 
     def _get_epsilon(self, step: int, total_steps: int, is_warmstart: bool) -> float:
         if is_warmstart:
@@ -161,6 +264,13 @@ class JaxDQNTrainer:
             return self.epsilon_end
         return self.epsilon_start + (self.epsilon_end - self.epsilon_start) * step / decay_steps
 
+    def _prep_obs(self, obs):
+        """Prepare observation for network input (add batch dim if needed)."""
+        obs_jax = jnp.array(obs, dtype=jnp.float32)
+        if not self.use_cnn:
+            obs_jax = obs_jax.flatten()
+        return obs_jax
+
     def _evaluate(self, env, params, obs_normalizer, n_episodes: int) -> float:
         """Evaluate current policy for n_episodes."""
         rewards = []
@@ -169,8 +279,14 @@ class JaxDQNTrainer:
             done = False
             total_reward = 0.0
             while not done:
-                obs_norm = obs_normalizer.normalize(obs) if obs_normalizer else obs
-                q_values = self.network.apply(params, jnp.array(obs_norm, dtype=jnp.float32))
+                if obs_normalizer is not None and not self.use_cnn:
+                    obs_input = obs_normalizer.normalize(obs)
+                else:
+                    obs_input = obs
+                obs_jax = self._prep_obs(obs_input)
+                q_values = self.network.apply(params, obs_jax[None] if self.use_cnn else obs_jax)
+                if self.use_cnn:
+                    q_values = q_values[0]
                 action = int(jnp.argmax(q_values))
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
@@ -200,7 +316,7 @@ class JaxDQNTrainer:
         initial_state : dict or None
             If provided, warm-start from these parameters
         obs_normalizer : RunningMeanStd or None
-            Observation normalizer
+            Observation normalizer (skipped for CNN)
         custom_reward_fn : callable or None
             Custom reward function r(obs) overriding env rewards
         eval_env : gym.Env or None
@@ -221,17 +337,19 @@ class JaxDQNTrainer:
             target_params = initial_state["target_params"]
             opt_state = initial_state["opt_state"]
             optimizer = optax.adam(self.lr)
-            # Re-init optimizer state with correct structure
             opt_state = optimizer.init(params)
         else:
             rng, init_rng = jax.random.split(rng)
-            dummy_obs = jnp.zeros((1, self.obs_dim))
+            if self.use_cnn:
+                dummy_obs = jnp.zeros((1, *self.obs_shape))
+            else:
+                dummy_obs = jnp.zeros((1, self.obs_dim))
             params = self.network.init(init_rng, dummy_obs)
             target_params = jax.tree.map(lambda p: p.copy(), params)
             optimizer = optax.adam(self.lr)
             opt_state = optimizer.init(params)
 
-        buffer = ReplayBuffer(self.buffer_size, self.obs_dim)
+        buffer = ReplayBuffer(self.buffer_size, self.obs_shape)
         eval_env = eval_env or env
 
         best_params = jax.tree.map(lambda p: p.copy(), params)
@@ -265,30 +383,38 @@ class JaxDQNTrainer:
         # Training loop
         obs, _ = env.reset()
         for step in range(total_timesteps):
-            # Epsilon-greedy action selection
             epsilon = self._get_epsilon(step, total_timesteps, is_warmstart)
             rng, action_rng, sample_rng = jax.random.split(rng, 3)
 
             if np.random.random() < epsilon:
                 action = env.action_space.sample()
             else:
-                obs_norm = obs_normalizer.normalize(obs) if obs_normalizer else obs
-                q_values = self.network.apply(params, jnp.array(obs_norm, dtype=jnp.float32))
+                if obs_normalizer is not None and not self.use_cnn:
+                    obs_input = obs_normalizer.normalize(obs)
+                else:
+                    obs_input = obs
+                obs_jax = self._prep_obs(obs_input)
+                q_values = self.network.apply(params, obs_jax[None] if self.use_cnn else obs_jax)
+                if self.use_cnn:
+                    q_values = q_values[0]
                 action = int(jnp.argmax(q_values))
 
             next_obs, reward, terminated, truncated, info = env.step(action)
 
-            # Apply custom reward if provided
             if custom_reward_fn is not None:
                 reward = custom_reward_fn(next_obs)
 
-            # Update normalizer
-            if obs_normalizer is not None:
+            # Update normalizer (only for flat obs)
+            if obs_normalizer is not None and not self.use_cnn:
                 obs_normalizer.update(obs.reshape(1, -1))
 
-            # Normalize for buffer storage
-            obs_store = obs_normalizer.normalize(obs) if obs_normalizer else obs
-            next_obs_store = obs_normalizer.normalize(next_obs) if obs_normalizer else next_obs
+            # Normalize for buffer storage (skip for CNN — use raw pixel values)
+            if obs_normalizer is not None and not self.use_cnn:
+                obs_store = obs_normalizer.normalize(obs)
+                next_obs_store = obs_normalizer.normalize(next_obs)
+            else:
+                obs_store = obs
+                next_obs_store = next_obs
 
             buffer.add(obs_store, action, reward, next_obs_store, terminated or truncated)
 
@@ -400,16 +526,17 @@ class JaxSACTrainer:
     Parameters
     ----------
     obs_dim : int
-        Observation space dimension
+        Observation space dimension (flat). Ignored if obs_shape is provided.
     action_dim : int
         Action space dimension
     config : dict
         Training hyperparameters
+    obs_shape : tuple or None
+        Full observation shape. If len > 1, uses CNN networks.
     """
 
-    def __init__(self, obs_dim: int, action_dim: int, config: dict = None):
+    def __init__(self, obs_dim: int, action_dim: int, config: dict = None, obs_shape: tuple = None):
         config = config or {}
-        self.obs_dim = obs_dim
         self.action_dim = action_dim
         self.gamma = config.get("gamma", 0.99)
         self.tau = config.get("tau", 0.005)
@@ -424,11 +551,37 @@ class JaxSACTrainer:
         self.eval_freq = config.get("eval_freq", 5000)
         self.n_eval_episodes = config.get("n_eval_episodes", 5)
         self.init_alpha = config.get("init_alpha", 1.0)
+        self.features_dim = config.get("features_dim", 128)
 
         self.target_entropy = -action_dim
 
-        self.actor = GaussianActor(action_dim=action_dim, hidden_dims=self.hidden_dims)
-        self.critic = TwinQNetwork(hidden_dims=self.hidden_dims)
+        # Determine observation shape and network type
+        if obs_shape is not None and len(obs_shape) > 1:
+            self.obs_shape = obs_shape
+            self.use_cnn = True
+            self.obs_dim = int(np.prod(obs_shape))
+            self.actor = CNNGaussianActor(
+                action_dim=action_dim,
+                features_dim=self.features_dim,
+                hidden_dims=self.hidden_dims,
+            )
+            self.critic = CNNTwinQNetwork(
+                features_dim=self.features_dim,
+                hidden_dims=self.hidden_dims,
+            )
+        else:
+            self.obs_shape = (obs_dim,) if obs_shape is None else obs_shape
+            self.use_cnn = False
+            self.obs_dim = obs_dim
+            self.actor = GaussianActor(action_dim=action_dim, hidden_dims=self.hidden_dims)
+            self.critic = TwinQNetwork(hidden_dims=self.hidden_dims)
+
+    def _prep_obs(self, obs):
+        """Prepare observation for network input."""
+        obs_jax = jnp.array(obs, dtype=jnp.float32)
+        if not self.use_cnn:
+            obs_jax = obs_jax.flatten()
+        return obs_jax
 
     def _evaluate(self, env, actor_params, obs_normalizer, n_episodes: int) -> float:
         """Evaluate current policy deterministically."""
@@ -438,10 +591,15 @@ class JaxSACTrainer:
             done = False
             total_reward = 0.0
             while not done:
-                obs_norm = obs_normalizer.normalize(obs) if obs_normalizer else obs
-                mean, _ = self.actor.apply(actor_params, jnp.array(obs_norm, dtype=jnp.float32))
+                if obs_normalizer is not None and not self.use_cnn:
+                    obs_input = obs_normalizer.normalize(obs)
+                else:
+                    obs_input = obs
+                obs_jax = self._prep_obs(obs_input)
+                mean, _ = self.actor.apply(actor_params, obs_jax[None] if self.use_cnn else obs_jax)
+                if self.use_cnn:
+                    mean = mean[0]
                 action = np.array(jnp.tanh(mean))
-                # Clip to action space
                 action = np.clip(action, env.action_space.low, env.action_space.high)
                 obs, reward, terminated, truncated, _ = env.step(action)
                 total_reward += reward
@@ -471,7 +629,7 @@ class JaxSACTrainer:
         initial_state : dict or None
             If provided, warm-start from these params
         obs_normalizer : RunningMeanStd or None
-            Observation normalizer
+            Observation normalizer (skipped for CNN)
         custom_reward_fn : callable or None
             Custom reward function r(obs) overriding env rewards
         eval_env : gym.Env or None
@@ -502,7 +660,10 @@ class JaxSACTrainer:
             alpha_opt_state = alpha_optimizer.init(log_alpha)
         else:
             rng, actor_rng, critic_rng = jax.random.split(rng, 3)
-            dummy_obs = jnp.zeros((1, self.obs_dim))
+            if self.use_cnn:
+                dummy_obs = jnp.zeros((1, *self.obs_shape))
+            else:
+                dummy_obs = jnp.zeros((1, self.obs_dim))
             dummy_action = jnp.zeros((1, self.action_dim))
 
             actor_params = self.actor.init(actor_rng, dummy_obs)
@@ -515,7 +676,7 @@ class JaxSACTrainer:
             alpha_opt_state = alpha_optimizer.init(log_alpha)
 
         buffer = ReplayBuffer(
-            self.buffer_size, self.obs_dim,
+            self.buffer_size, self.obs_shape,
             action_dim=self.action_dim, continuous=True,
         )
 
@@ -535,16 +696,13 @@ class JaxSACTrainer:
             alpha = jnp.exp(log_alpha)
 
             def critic_loss_fn(cp):
-                # Sample next actions from current policy
                 next_actions, next_log_probs = _sample_action(
                     actor_net, actor_params, batch["next_obs"], rng_key,
                 )
-                # Target Q values
                 tq1, tq2 = critic_net.apply(target_critic_params, batch["next_obs"], next_actions)
                 target_q = jnp.minimum(tq1, tq2) - alpha * next_log_probs
                 targets = batch["rewards"] + gamma * (1.0 - batch["dones"]) * target_q
 
-                # Current Q values
                 q1, q2 = critic_net.apply(cp, batch["obs"], batch["actions"])
                 loss = jnp.mean((q1 - jax.lax.stop_gradient(targets)) ** 2) + \
                        jnp.mean((q2 - jax.lax.stop_gradient(targets)) ** 2)
@@ -599,12 +757,18 @@ class JaxSACTrainer:
             if step < self.learning_starts and initial_state is None:
                 action = env.action_space.sample()
             else:
-                obs_norm = obs_normalizer.normalize(obs) if obs_normalizer else obs
+                if obs_normalizer is not None and not self.use_cnn:
+                    obs_input = obs_normalizer.normalize(obs)
+                else:
+                    obs_input = obs
+                obs_jax = self._prep_obs(obs_input)
                 action, _ = _sample_action(
                     actor_net, actor_params,
-                    jnp.array(obs_norm, dtype=jnp.float32),
+                    obs_jax[None] if self.use_cnn else obs_jax,
                     action_rng,
                 )
+                if self.use_cnn:
+                    action = action[0]
                 action = np.array(action)
                 action = np.clip(action, env.action_space.low, env.action_space.high)
 
@@ -613,11 +777,15 @@ class JaxSACTrainer:
             if custom_reward_fn is not None:
                 reward = custom_reward_fn(next_obs)
 
-            if obs_normalizer is not None:
+            if obs_normalizer is not None and not self.use_cnn:
                 obs_normalizer.update(obs.reshape(1, -1))
 
-            obs_store = obs_normalizer.normalize(obs) if obs_normalizer else obs
-            next_obs_store = obs_normalizer.normalize(next_obs) if obs_normalizer else next_obs
+            if obs_normalizer is not None and not self.use_cnn:
+                obs_store = obs_normalizer.normalize(obs)
+                next_obs_store = obs_normalizer.normalize(next_obs)
+            else:
+                obs_store = obs
+                next_obs_store = next_obs
 
             buffer.add(obs_store, action, reward, next_obs_store, terminated or truncated)
 

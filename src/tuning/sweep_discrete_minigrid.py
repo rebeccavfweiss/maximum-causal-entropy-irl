@@ -9,7 +9,6 @@ Usage:
 
 import argparse
 import numpy as np
-import multiprocessing
 import wandb
 from random import randint
 import agents.demonstrator as demonstrator
@@ -88,6 +87,17 @@ if __name__ == "__main__":
         required=True,
         help="Which agent type to optimize",
     )
+    parser.add_argument(
+        "--sweep-id",
+        default=None,
+        help="Existing sweep ID to join (for parallel agents in separate terminals)",
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=None,
+        help="Number of runs for this agent (default: sweep_count from config)",
+    )
     args = parser.parse_args()
 
     _yaml_config = load_config(args.config)
@@ -96,26 +106,14 @@ if __name__ == "__main__":
     adjusted_sweep = prepare_sweep_config(_yaml_config["sweep"], _agent_type)
     project = _yaml_config["wandb"]["project"]
 
-    sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
-    # wandb.agent(
-    #     sweep_id,
-    #     function=train,
-    #     count=_yaml_config["wandb"]["sweep_count"],
-    # )
+    if args.sweep_id:
+        sweep_id = args.sweep_id
+    else:
+        sweep_id = wandb.sweep(adjusted_sweep, project=f"{project}-{_agent_type}")
+        print(f"Created sweep: {sweep_id}")
+        print(f"To add parallel agents, run in other terminals:")
+        print(f"  python -m tuning.sweep_discrete_minigrid {args.config} "
+              f"--agent-type {_agent_type} --sweep-id {sweep_id}")
 
-    num_agents = 5 
-
-    processes = []
-    for i in range(num_agents):
-        # We use a helper to call wandb.agent in a separate process
-        p = multiprocessing.Process(
-            target=wandb.agent, 
-            args=(sweep_id,), 
-            kwargs={'function': train, 'count': int(_yaml_config["wandb"]["sweep_count"]/num_agents)} # Each agent does 5 runs
-        )
-        p.start()
-        processes.append(p)
-
-    for p in processes:
-        p.join()
-
+    count = args.count or _yaml_config["wandb"]["sweep_count"]
+    wandb.agent(sweep_id, function=train, count=count, project=f"{project}-{_agent_type}")

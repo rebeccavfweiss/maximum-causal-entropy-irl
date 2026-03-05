@@ -26,6 +26,7 @@ SWEEP_SCRIPTS = {
     "box2d": "tuning.sweep_box2d",
     "car_racing": "tuning.sweep_car_racing",
     "box2d_jax": "tuning.sweep_box2d_jax",
+    "continuous_minigrid_jax": "tuning.sweep_continuous_minigrid_jax",
 }
 
 CONFIG_DIR = Path(__file__).parent / "configs"

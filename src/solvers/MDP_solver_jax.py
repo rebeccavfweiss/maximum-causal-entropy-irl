@@ -71,16 +71,25 @@ class JaxSolver(MDPSolverApproximation):
 
     def _create_trainer(self, env: gym.Env):
         """Lazily create the appropriate trainer based on training_algorithm."""
-        obs_dim = env.observation_space.shape[0]
+        obs_shape = env.observation_space.shape
+        obs_dim = obs_shape[0] if len(obs_shape) == 1 else int(np.prod(obs_shape))
+        use_cnn = len(obs_shape) > 1
 
         if self.training_algorithm == "sac":
-            action_dim = env.action_space.n
-            self.trainer = JaxSACTrainer(obs_dim, action_dim, self.training_config)
+            action_dim = env.action_space.shape[0]
+            self.trainer = JaxSACTrainer(
+                obs_dim, action_dim, self.training_config, obs_shape=obs_shape
+            )
         else:
             action_dim = env.action_space.n
-            self.trainer = JaxDQNTrainer(obs_dim, action_dim, self.training_config)
+            self.trainer = JaxDQNTrainer(
+                obs_dim, action_dim, self.training_config, obs_shape=obs_shape
+            )
 
-        self.obs_normalizer = RunningMeanStd(shape=(obs_dim,))
+        if use_cnn:
+            self.obs_normalizer = None
+        else:
+            self.obs_normalizer = RunningMeanStd(shape=(obs_dim,))
 
 
 class JaxSolverExpectation(JaxSolver):
@@ -169,6 +178,7 @@ class JaxSolverExpectation(JaxSolver):
             network,
             obs_normalizer=self.obs_normalizer,
             mode=mode,
+            use_cnn=self.trainer.use_cnn,
         )
 
         return policy, result.train_state
@@ -258,6 +268,7 @@ class JaxSolverVariance(JaxSolver):
             network,
             obs_normalizer=self.obs_normalizer,
             mode=mode,
+            use_cnn=self.trainer.use_cnn,
         )
 
         return policy, result.train_state
