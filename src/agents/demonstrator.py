@@ -2,6 +2,7 @@ import solvers.MDP_solver as MDP_solver
 from solvers.MDP_solver_exact import MDPSolverExactExpectation
 from environments.environment import Environment, ContinuousEnvironment
 from environments.simple_environment import SimpleEnvironment
+from environments.cliff_walking_environment import CliffWalkingEnvironment
 from environments.discrete_minigrid_environment import DiscreteMinigridEnvironment
 from environments.object_world_environment import ObjectWorldEnvironment
 from policy import TabularPolicy, ModelPolicy
@@ -159,6 +160,90 @@ class SimpleDemonstrator(Demonstrator):
         self.V = self._compute_value_function(pi_s)
 
         return pi_s
+
+
+class CliffWalkingDemonstrator(Demonstrator):
+    """
+    Hard-coded demonstrator for CliffWalking that takes the safe upper path.
+
+    Path: Start (3,0) → go up to (0,0) → go right along row 0 to (0,11) →
+    go down to (3,11) which is the goal. This is as far from the cliff as possible.
+
+    Parameters
+    ----------
+    env : CliffWalkingEnvironment
+        the environment
+    demonstrator_name : str
+        name of the demonstrator
+    T : int
+        finite horizon
+    n_trajectories : int
+        number of trajectories for feature expectation computation
+    """
+
+    def __init__(
+        self,
+        env: CliffWalkingEnvironment,
+        demonstrator_name: str,
+        T: int = 50,
+        n_trajectories: int = None,
+    ):
+        super().__init__(env, demonstrator_name, T, n_trajectories)
+
+        self.policy = TabularPolicy(self._define_policy())
+        self.mu_demonstrator = self.get_mu_using_reward_features()
+
+    def _define_policy(self):
+        pi_s = np.zeros((self.T, self.env.n_states, self.env.n_actions))
+
+        UP = CliffWalkingEnvironment.ACTION_UP
+        RIGHT = CliffWalkingEnvironment.ACTION_RIGHT
+        DOWN = CliffWalkingEnvironment.ACTION_DOWN
+
+        # Robust safe-path policy for stochastic transitions:
+        #
+        # - Every cell in rows 1-3 and cols 0-10: always go UP first
+        #   (recover towards safety if blown towards the cliff)
+        # - Row 0 (top), cols 0-10: go RIGHT (traverse along safe top row)
+        # - Col 11 (last column), rows 0-2: go DOWN (descend to goal)
+        # - Row 2, col 11: also goes DOWN to reach goal at (3,11)
+
+        # Default: rows 1-3, cols 0-10 → go UP (safety-first)
+        for row in range(1, 4):
+            for col in range(0, 11):
+                s = self.env.rowcol_to_state(row, col)
+                pi_s[:, s, UP] = 1.0
+
+        # Top row, cols 0-10 → go RIGHT
+        for col in range(0, 11):
+            s = self.env.rowcol_to_state(0, col)
+            pi_s[:, s, :] = 0.0
+            pi_s[:, s, RIGHT] = 1.0
+
+        # Last column, rows 0-2 → go DOWN towards goal
+        for row in range(0, 3):
+            s = self.env.rowcol_to_state(row, 11)
+            pi_s[:, s, :] = 0.0
+            pi_s[:, s, DOWN] = 1.0
+
+        self.V = self._compute_value_function(pi_s)
+
+        return pi_s
+
+    def _compute_value_function(self, pi: np.ndarray) -> np.ndarray:
+        V = np.zeros((self.T + 1, self.env.n_states))
+        for t in range(self.T - 1, -1, -1):
+            for s in range(self.env.n_states):
+                V[t, s] = sum(
+                    pi[t, s, a]
+                    * sum(
+                        self.env.T_matrix[s, s_prime, a]
+                        * (self.env.reward[s] + self.env.gamma * V[t + 1, s_prime])
+                        for s_prime in range(self.env.n_states)
+                    )
+                    for a in range(self.env.n_actions)
+                )
+        return V
 
 
 class CrossingMinigridDemonstrator(Demonstrator):
