@@ -29,6 +29,7 @@ import copy
 import os
 from pathlib import Path
 from policy import Policy
+from datetime import datetime
 from environments.environment import GridEnvironment
 
 
@@ -170,8 +171,8 @@ class CliffWalkingEnvironment(GridEnvironment):
         ns = row * self.cols + col
 
         # Cliff or goal → absorbing terminal
-        if (ns in self.CLIFF_STATES) or (ns == self.GOAL_STATE):
-            return self.terminal_state
+        # if (ns in self.CLIFF_STATES) or (ns == self.GOAL_STATE):
+        #     return self.terminal_state
 
         return ns
 
@@ -188,7 +189,11 @@ class CliffWalkingEnvironment(GridEnvironment):
         self.time_step += 1
 
         terminated = new_state in self.terminal_states
-        return new_state, self.reward[new_state], terminated, self.time_step > self.T
+        if terminated:
+            new_state_returned = self.terminal_state
+        else:
+            new_state_returned = new_state
+        return new_state_returned, self.reward[new_state], terminated, self.time_step > self.T
 
     def state_to_rowcol(self, state: int) -> tuple[int, int]:
         if state >= self.N_GYM_STATES:
@@ -298,7 +303,7 @@ class CliffWalkingEnvironment(GridEnvironment):
         # Record an episode as MP4 only when our success_rate matches the
         # gym env's dynamics (1.0 deterministic, or 1/3 with is_slippery)
         gym_matches = (self.success_rate == 1.0) or self._gym_is_slippery
-        if store and policy is not None and gym_matches:
+        if store and (policy is not None) and gym_matches:
             video_path = self._record_episode(policy, T, strname)
 
         return video_path
@@ -349,12 +354,18 @@ class CliffWalkingEnvironment(GridEnvironment):
 
             if gym_terminated or gym_truncated:
                 break
-
-        video_path = rec_dir / f"{strname}.mp4"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_path = rec_dir / f"{strname}_{timestamp}.mp4"
         imageio.mimsave(
             str(video_path),
             [np.array(img) for img in images],
             fps=fps,
         )
+
+        max_retries = 5
+        for i in range(max_retries):
+            if video_path.exists() and video_path.stat().st_size > 0:
+                break # File is ready!
+            time.sleep(1) # Wait 1 second and try again
 
         return video_path
