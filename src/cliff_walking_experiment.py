@@ -54,12 +54,12 @@ def create_cliff_walking_env(success_rate: float, one_hot_features: bool = True)
     return CliffWalkingEnvironment(config_env)
 
 
-def create_config_learner():
+def create_config_learner(one_hot_features:bool):
     return {
-        "tol_exp": 0.001,
-        "tol_var": 0.005,
+        "tol_exp": 0.01 if one_hot_features else 0.001,
+        "tol_var": 0.5 if one_hot_features else 0.005,
         "miniter": 1,
-        "maxiter": 3000,
+        "maxiter": 10000,
     }
 
 
@@ -77,11 +77,11 @@ def run_experiment(args):
             "run": i,
             "one_hot_features": one_hot_features,
         },
-        reinit="finish_previous",
+        reinit=True#"finish_previous",
     )
 
     env = create_cliff_walking_env(success_rate, one_hot_features)
-    config_default_learner = create_config_learner()
+    config_default_learner = create_config_learner(one_hot_features)
 
     demo = demonstrator.CliffWalkingDemonstrator(
         env,
@@ -93,10 +93,14 @@ def run_experiment(args):
         wandb.log(
             {
                 "eval/video_demonstrator": wandb.Video(
-                    str(path_to_file), fps=2, format="mp4"
+                    str(path_to_file), format="mp4"
                 )
             }
         )
+        if os.path.exists(path_to_file):
+            os.remove(path_to_file)
+
+
     reward_demonstrator = env.compute_true_reward_for_agent(demo, None, T)
 
     wandb.log(
@@ -107,7 +111,7 @@ def run_experiment(args):
             "success_rate": success_rate,
         }
     )
-
+    
     # Expectation matching agent
     agent_expectation = learner.TabularLearner(
         env,
@@ -123,10 +127,20 @@ def run_experiment(args):
         wandb.log(
             {
                 "eval/video_expectation": wandb.Video(
-                    str(path_to_file), fps=2, format="mp4"
+                    str(path_to_file), format="mp4"
                 )
             }
         )
+        if os.path.exists(path_to_file):
+            os.remove(path_to_file)
+            print(f"{path_to_file} successfully deleted.")
+        else:
+            print(f"{path_to_file} not found.")
+    else:
+        print(f"{path_to_file} not found and not uploaded to WANDB.")
+        
+
+
 
     reward_expectation = env.compute_true_reward_for_agent(agent_expectation, None, T)
     wandb.log(
@@ -152,8 +166,10 @@ def run_experiment(args):
     path_to_file = agent_variance.render(False, True, 8)
     if path_to_file is not None:
         wandb.log(
-            {"eval/video_variance": wandb.Video(str(path_to_file), fps=2, format="mp4")}
+            {"eval/video_variance": wandb.Video(str(path_to_file), format="mp4")}
         )
+        if os.path.exists(path_to_file):
+            os.remove(path_to_file)
 
     reward_variance = env.compute_true_reward_for_agent(agent_variance, None, T)
     wandb.log(
@@ -190,8 +206,8 @@ def run_experiment(args):
 if __name__ == "__main__":
 
     success_rates = [1.0, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 1.0 / 3.0]
-    T = 100
-    runs = 5
+    T = 50
+    runs = 10
 
     tasks = []
     for sr in success_rates:
