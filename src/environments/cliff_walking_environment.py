@@ -28,8 +28,9 @@ import imageio
 import copy
 import os
 from pathlib import Path
-from policy import Policy
+from policy import Policy, TabularPolicy
 from datetime import datetime
+import time
 from environments.environment import GridEnvironment
 
 
@@ -59,6 +60,8 @@ class CliffWalkingEnvironment(GridEnvironment):
     START_STATE = 36  # (row=3, col=0)
     GOAL_STATE = 47  # (row=3, col=11)
     CLIFF_STATES = list(range(37, 47))  # (row=3, col=1..10)
+    # States directly adjacent to the cliff (above: 25-34, left: 36, right: 47)
+    CLIFF_ADJACENT_STATES = list(range(25, 35)) + [36, 47]
 
     def __init__(self, env_args: dict):
         super().__init__(env_args)
@@ -77,7 +80,7 @@ class CliffWalkingEnvironment(GridEnvironment):
         self.n_states = self.N_GYM_STATES + 1
         self.terminal_state = self.N_GYM_STATES  # index 48
 
-        self.n_features = self.n_states if self.one_hot_features else 1
+        self.n_features = self.n_states if self.one_hot_features else 3
 
         self.InitD = self._get_initial_distribution()
         self.T_matrix, self.terminal_states = self._compute_transition_matrix()
@@ -112,8 +115,14 @@ class CliffWalkingEnvironment(GridEnvironment):
         if self.one_hot_features:
             return np.eye(self.n_states, dtype=np.float64)
         else:
-            # 1D features: each state's feature is its integer index
-            return np.arange(self.n_states, dtype=np.float64).reshape(-1, 1)
+            # 3D features: [state_index, step_count, cliff_adjacent]
+            F = np.zeros((self.n_states, 3), dtype=np.float64)
+            for s in range(self.N_GYM_STATES):
+                F[s, 0] = float(s)  # state index
+                F[s, 1] = 1.0  # step count (constant 1)
+                F[s, 2] = float(s in self.CLIFF_ADJACENT_STATES)
+            # Terminal state (48): all zeros
+            return F
 
     def _compute_transition_matrix(self) -> tuple[np.ndarray, list[int]]:
         """
@@ -131,10 +140,13 @@ class CliffWalkingEnvironment(GridEnvironment):
         # Absorbing terminal state
         P[self.terminal_state, self.terminal_state, :] = 1.0
 
-        # Cliff and goal states transition to terminal
-        for s in self.CLIFF_STATES + [self.GOAL_STATE]:
-            P[s, self.terminal_state, :] = 1.0
-            terminal_states.append(s)
+        # Goal state transitions to terminal
+        P[self.GOAL_STATE, self.terminal_state, :] = 1.0
+        terminal_states.append(self.GOAL_STATE)
+
+        # Cliff states reset to start (agent gets cliff reward but continues)
+        for s in self.CLIFF_STATES:
+            P[s, self.START_STATE, :] = 1.0
 
         slip_prob = (1.0 - self.success_rate) / 2.0
 
@@ -155,7 +167,11 @@ class CliffWalkingEnvironment(GridEnvironment):
         return P, terminal_states
 
     def _deterministic_next_state(self, state: int, action: int) -> int:
-        """Compute next state for a deterministic action, handling cliff/goal."""
+        """Compute raw next grid state for a deterministic action.
+
+        Returns the actual grid state (including cliff/goal). The transition
+        matrix handles cliff→start and goal→terminal redirects separately.
+        """
         row = state // self.cols
         col = state % self.cols
 
@@ -168,13 +184,7 @@ class CliffWalkingEnvironment(GridEnvironment):
         elif action == self.ACTION_RIGHT:
             col = min(col + 1, self.cols - 1)
 
-        ns = row * self.cols + col
-
-        # Cliff or goal → absorbing terminal
-        # if (ns in self.CLIFF_STATES) or (ns == self.GOAL_STATE):
-        #     return self.terminal_state
-
-        return ns
+        return row * self.cols + col
 
     def reset(self) -> int:
         self.agent_position = self.START_STATE
@@ -189,11 +199,14 @@ class CliffWalkingEnvironment(GridEnvironment):
         self.time_step += 1
 
         terminated = new_state in self.terminal_states
-        if terminated:
-            new_state_returned = self.terminal_state
-        else:
-            new_state_returned = new_state
-        return new_state_returned, self.reward[new_state], terminated, self.time_step > self.T
+        if new_state in self.CLIFF_STATES:
+            self.agent_position = self.START_STATE
+        return (
+            self.agent_position,
+            self.reward[new_state],
+            terminated,
+            self.time_step > self.T,
+        )
 
     def state_to_rowcol(self, state: int) -> tuple[int, int]:
         if state >= self.N_GYM_STATES:
@@ -345,8 +358,12 @@ class CliffWalkingEnvironment(GridEnvironment):
         images.append(img)
 
         gym_state = self.START_STATE
+
         for t in range(T):
-            action = policy.predict(gym_state, t)
+            # Map gym state to the representation the agent knows
+            obs = self.feature_matrix[gym_state]
+
+            action = policy.predict(obs, t)
 
             gym_state, _, gym_terminated, gym_truncated, _ = self._gym_env.step(action)
             img = self._gym_env.render()
@@ -365,7 +382,7 @@ class CliffWalkingEnvironment(GridEnvironment):
         max_retries = 5
         for i in range(max_retries):
             if video_path.exists() and video_path.stat().st_size > 0:
-                break # File is ready!
-            time.sleep(1) # Wait 1 second and try again
+                break  # File is ready!
+            time.sleep(1)  # Wait 1 second and try again
 
         return video_path
