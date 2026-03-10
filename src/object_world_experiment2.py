@@ -120,9 +120,8 @@ def train():
         wandb.log(
             {
                 "reward_expectation": reward_expectation,
-                "reward_diff_expectation": np.abs(
-                    reward_demonstrator - reward_expectation
-                ),
+                "reward_diff_expectation": reward_expectation -
+                    reward_demonstrator,
                 "iterations_expectation": iter_expectation,
                 "time_total_expectation": sum(time_expectation),
                 "time_avg_per_iter_expectation": np.mean(time_expectation),
@@ -168,7 +167,7 @@ def train():
         wandb.log(
             {
                 "reward_variance": reward_variance,
-                "reward_diff_variance": np.abs(reward_demonstrator - reward_variance),
+                "reward_diff_variance": reward_variance - reward_demonstrator,
                 "iterations_variance": iter_variance,
                 "time_total_variance": sum(time_variance),
                 "time_avg_per_iter_variance": np.mean(time_variance),
@@ -180,7 +179,7 @@ if __name__ == "__main__":
     # Define the sweep configuration
     sweep_config = {
         "method": "bayes",  # Bayesian optimization to find best params faster
-        "metric": {"name": "reward_variance", "goal": "maximize"},
+        "metric": {"name": "reward_diff_variance", "goal": "maximize"},
         "parameters": {
             "n_trajectories": {"value": 100},
             "grid_size": {"value": 6},
