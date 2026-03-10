@@ -9,7 +9,7 @@ environment:
   n_trajectories_eval: 100
 
 demonstrator:
-  n_trajectories: 100
+  n_trajectories: 500
 
 wandb:
   project: "mceirl-object-world-tuning"
@@ -18,7 +18,7 @@ wandb:
 sweep:
   method: bayes
   metric:
-    name: reward__diff_variance
+    name: reward_diff_variance
     goal: maximize
   parameters:
     env_gamma:

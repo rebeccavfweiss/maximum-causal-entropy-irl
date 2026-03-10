@@ -7,7 +7,7 @@ environment:
   n_trajectories_eval: 150
 
 demonstrator:
-  training_algorithm: ppo
+  training_algorithm: dqn
   time_steps: 7500000
   n_trajectories: 150
   training_timesteps: 350000
@@ -54,11 +54,11 @@ sweep:
     tol_exp:
       values: [5.0, 10.0, 25.0, 50.0]
     maxiter:
-      values: [30, 50, 75, 100]
+      values: [30, 50, 75, 100, 200, 500]
     miniter:
       value: 1
     n_trajectories:
-      value: 150
+      value: 50
     # IRL optimizer config (shared - theta_e)
     lr_e:
       distribution: log_uniform_values
