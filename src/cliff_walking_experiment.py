@@ -213,7 +213,7 @@ if __name__ == "__main__":
     for sr in success_rates:
         for one_hot in [True, False]:
             for i in range(runs):
-                tasks.append((sr, T, i, one_hot))
+                tasks.append((sr, T * int(1 / sr), i, one_hot))
 
     with Pool(processes=10) as pool:
         results = pool.map(run_experiment, tasks)

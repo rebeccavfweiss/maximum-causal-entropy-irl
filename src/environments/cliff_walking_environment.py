@@ -80,7 +80,7 @@ class CliffWalkingEnvironment(GridEnvironment):
         self.n_states = self.N_GYM_STATES + 1
         self.terminal_state = self.N_GYM_STATES  # index 48
 
-        self.n_features = self.n_states if self.one_hot_features else 3
+        self.n_features = self.n_states if self.one_hot_features else 2
 
         self.InitD = self._get_initial_distribution()
         self.T_matrix, self.terminal_states = self._compute_transition_matrix()
@@ -115,12 +115,10 @@ class CliffWalkingEnvironment(GridEnvironment):
         if self.one_hot_features:
             return np.eye(self.n_states, dtype=np.float64)
         else:
-            # 3D features: [state_index, step_count, cliff_adjacent]
-            F = np.zeros((self.n_states, 3), dtype=np.float64)
+            F = np.zeros((self.n_states, 2), dtype=np.float64)
             for s in range(self.N_GYM_STATES):
                 F[s, 0] = float(s)  # state index
                 F[s, 1] = 1.0  # step count (constant 1)
-                F[s, 2] = float(s in self.CLIFF_ADJACENT_STATES)
             # Terminal state (48): all zeros
             return F
 
@@ -360,10 +358,8 @@ class CliffWalkingEnvironment(GridEnvironment):
         gym_state = self.START_STATE
 
         for t in range(T):
-            # Map gym state to the representation the agent knows
-            obs = self.feature_matrix[gym_state]
 
-            action = policy.predict(obs, t)
+            action = policy.predict(gym_state, t)
 
             gym_state, _, gym_terminated, gym_truncated, _ = self._gym_env.step(action)
             img = self._gym_env.render()
