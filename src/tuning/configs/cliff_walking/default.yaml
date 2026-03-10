@@ -1,7 +1,7 @@
 environment:
   type: cliff_walking
   gamma: 1.0
-  success_rate: 1.0/3.0
+  success_rate: 0.3333333333333333
   one_hot_features: false
 
 demonstrator:
