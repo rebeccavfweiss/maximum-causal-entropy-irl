@@ -57,7 +57,7 @@ def run_experiment(args):
     store = False
     # n_trajectories = 200
     experiment_name = "object-world"
-    T = 20
+    T = 40
     grid_size = 6
     gamma = 1.0
     random_start = False
@@ -228,12 +228,8 @@ def run_experiment(args):
 if __name__ == "__main__":
 
     tasks = []
-    for n_trajectories in [1,10,50,100,200,500]:
+    for n_trajectories in [1,10,50,100,200,500, 1000, 2500, 5000]:
         for run in range(10):
-            tasks.append((n_trajectories, run))
-
-    for n_trajectories in [1000, 2500, 5000]:
-        for run in range(20):
             tasks.append((n_trajectories, run))
 
     with Pool(processes=5) as pool:
