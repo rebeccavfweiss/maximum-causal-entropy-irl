@@ -190,7 +190,7 @@ if __name__ == "__main__":
 
     wandb.log({
         "reward_expectation": reward_expectation,
-        "reward_diff_expectation": np.abs(reward_demonstrator - reward_expectation),
+        "reward_diff_expectation": reward_expectation - reward_demonstrator,
         "iterations_expectation": iter_exp,
         "time_total_expectation": sum(time_exp),
         "time_avg_per_iter_expectation": np.mean(time_exp),
@@ -228,7 +228,7 @@ if __name__ == "__main__":
 
     wandb.log({
         "reward_variance": reward_variance,
-        "reward_diff_variance": np.abs(reward_demonstrator - reward_variance),
+        "reward_diff_variance": reward_variance - reward_demonstrator,
         "iterations_variance": iter_var,
         "time_total_variance": sum(time_var),
         "time_avg_per_iter_variance": np.mean(time_var),
@@ -299,7 +299,7 @@ if __name__ == "__main__":
 
         wandb.log({
             "reward_mmd": reward_mmd,
-            "reward_diff_mmd": np.abs(reward_demonstrator - reward_mmd),
+            "reward_diff_mmd": reward_mmd - reward_demonstrator,
             "iterations_mmd": iter_mmd,
             "time_total_mmd": sum(time_mmd),
         })
