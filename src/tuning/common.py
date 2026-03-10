@@ -604,9 +604,8 @@ def train_and_evaluate_jax(
         wandb.log(
             {
                 "reward_variance": reward,
-                "reward_diff_variance": np.abs(
-                    reward_demonstrator - reward
-                ),
+                "reward_diff_variance": reward - 
+                    reward_demonstrator,
                 "iterations_variance": iters,
                 "time_total_variance": sum(times),
                 "time_avg_per_iter_variance": np.mean(times),
@@ -715,7 +714,7 @@ def train_and_evaluate_mmd(
     wandb.log(
         {
             "reward_mmd": reward,
-            "reward_diff_mmd": np.abs(reward_demonstrator - reward),
+            "reward_diff_mmd": reward - reward_demonstrator,
             "iterations_mmd": iters,
             "time_total_mmd": sum(times),
             "time_avg_per_iter_mmd": np.mean(times),
