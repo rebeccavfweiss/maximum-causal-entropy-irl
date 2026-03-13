@@ -169,7 +169,7 @@ class ObjectWorldEnvironment(GridEnvironment):
         """
         feature_matrix = np.zeros((self.n_states, self.n_features))
         for i in range(self.n_states):
-            feature_matrix[i, :] = self.__get_state_feature_vector_full(i)
+            feature_matrix[i, :] = self.__get_state_feature_vector_full(i, self.discrete)
         return feature_matrix
 
     def __get_state_feature_vector_full(self, state: int, discrete=True) -> np.ndarray:
