@@ -55,7 +55,7 @@ class ObjectWorldEnvironment(GridEnvironment):
         self.n_actions = len(self.actions)
         self.n_states = self.grid_size**2
         self.n_objects = env_args.get("n_objects", 15)
-        self.n_colors = env_args.get("n_colors", 3)
+        self.n_colors = env_args.get("n_colors", 2)
         self.random_start = env_args["random_start"]
         self.discrete = not env_args.get("continuous", False)
         self.T = env_args["T"]
