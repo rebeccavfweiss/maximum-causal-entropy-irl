@@ -4,7 +4,7 @@ environment:
   grid_size: 32
   T: 50
   random_start: true
-  continuous: false
+  continuous: true
   theta: [1.0, 1.0, -2.0]
   n_objects: 18
   n_trajectories_eval: 100
@@ -14,7 +14,7 @@ demonstrator:
   T: 8
 
 wandb:
-  project: "mceirl-object-world-tuning"
+  project: "mceirl-object-world-cont-tuning"
   sweep_count: 50
 
 sweep:
@@ -34,8 +34,6 @@ sweep:
       value: 2500
     miniter:
       value: 1
-    early_stop_window:
-      value: 200
     # Optimizer config (shared - theta_e)
     optimizer_type_e:
       values: ["Adam", "RMSprop", "Adamax", "SGD"]
