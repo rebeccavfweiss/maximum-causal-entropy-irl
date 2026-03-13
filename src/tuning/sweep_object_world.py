@@ -52,10 +52,11 @@ def train():
 
         # wandb.log({"env_gamma": env.gamma}) # if not logged -> = 1.
 
+        demo_T = demo_cfg.get("T", env_cfg["T"])
         demo = demonstrator.ObjectWorldDemonstrator(
             env,
             demonstrator_name="ObjectWorldDemonstrator",
-            T=env_cfg["T"],
+            T=demo_T,
             n_trajectories=demo_cfg.get("n_trajectories"),
         )
 

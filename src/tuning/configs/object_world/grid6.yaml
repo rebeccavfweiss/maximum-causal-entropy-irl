@@ -1,15 +1,17 @@
 environment:
   type: object_world
   gamma: 0.95
-  grid_size: 6
+  grid_size: 32
   T: 20
-  random_start: false
+  random_start: true
   continuous: false
   theta: [1.0, 1.0, -2.0]
+  n_objects: 2
   n_trajectories_eval: 100
 
 demonstrator:
   n_trajectories: 500
+  T: 8
 
 wandb:
   project: "mceirl-object-world-tuning"
