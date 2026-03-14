@@ -19,6 +19,8 @@ import pandas as pd
 from multiprocessing import Pool
 import wandb
 from pathlib import Path
+from torch.optim import RMSprop, Adamax
+from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
 
 
 def create_cliff_walking_env(success_rate: float, one_hot_features: bool = True):
@@ -56,8 +58,8 @@ def create_cliff_walking_env(success_rate: float, one_hot_features: bool = True)
 
 def create_config_learner(one_hot_features:bool):
     return {
-        "tol_exp": 0.01 if one_hot_features else 0.001,
-        "tol_var": 0.5 if one_hot_features else 0.005,
+        "tol_exp": 0.5 if one_hot_features else 0.1,
+        "tol_var": 5.0 if one_hot_features else 1.0,
         "miniter": 1,
         "maxiter": 10000,
     }
@@ -79,6 +81,27 @@ def run_experiment(args):
         },
         reinit=True#"finish_previous",
     )
+
+    learning_rate_e ={
+        "scheduler": ReduceLROnPlateau,
+        "scheduler_kwargs": {"min_lr": 0.0001, "factor":0.5},
+    }
+    learning_rate_v = {
+        "scheduler": CyclicLR,
+        "scheduler_kwargs": {
+            "base_lr": 0.025617432353436567,
+            "max_lr": 0.025617432353436567 +0.05,
+            "step_size_up": 100,
+            "mode": "exp_range",
+            "gamma": 0.95,
+        },
+    }
+    optimizer_e = RMSprop
+    optimizer_v = Adamax
+    optimizer_e_kwargs = {"lr": 0.025617432353436567, "weight_decay":0}
+    optimizer_v_kwargs = {"lr": 0.07963730913863386, "eps": 1e-7, "weight_decay": 0.005}
+    alternate_every = None
+    var_factor = 3
 
     env = create_cliff_walking_env(success_rate, one_hot_features)
     config_default_learner = create_config_learner(one_hot_features)
@@ -121,7 +144,7 @@ def run_experiment(args):
         solver=MDPSolver.MDPSolverExactExpectation(T),
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
-    agent_expectation.compute_and_draw(False, True, 2)
+    agent_expectation.compute_and_draw(False, False, 2)
     path_to_file = agent_expectation.render(False, True, 6)
     if path_to_file is not None:
         wandb.log(
@@ -158,11 +181,19 @@ def run_experiment(args):
         env,
         demo.mu_demonstrator,
         config_default_learner,
-        agent_name="AgentVariance",
+        agent_name=f"AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
+        learning_rate_e=learning_rate_e,
+        learning_rate_v=learning_rate_v,
+        optimizer_e=optimizer_e,
+        optimizer_v=optimizer_v,
+        optimizer_e_kwargs=optimizer_e_kwargs,
+        optimizer_v_kwargs=optimizer_v_kwargs,
     )
-    iter_variance, time_variance = agent_variance.batch_MCE()
-    agent_variance.compute_and_draw(False, True, 4)
+    iter_variance, time_variance = agent_variance.batch_MCE(
+        alternate_every=alternate_every, var_factor=var_factor
+    )
+    agent_variance.compute_and_draw(False, False, 4)
     path_to_file = agent_variance.render(False, True, 8)
     if path_to_file is not None:
         wandb.log(
@@ -207,7 +238,7 @@ if __name__ == "__main__":
 
     success_rates = [1.0, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 1.0 / 3.0]
     T = 50
-    runs = 10
+    runs = 20
 
     tasks = []
     for sr in success_rates:
@@ -215,7 +246,7 @@ if __name__ == "__main__":
             for i in range(runs):
                 tasks.append((sr, T * int(1 / sr), i, one_hot))
 
-    with Pool(processes=10) as pool:
+    with Pool(processes=7) as pool:
         results = pool.map(run_experiment, tasks)
 
     results_df = pd.DataFrame(
