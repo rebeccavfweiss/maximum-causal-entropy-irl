@@ -1,12 +1,12 @@
 environment:
   type: object_world
   gamma: 0.95
-  grid_size: 32
+  grid_size: 16
   T: 50
   random_start: true
   continuous: true
   theta: [1.0, 1.0, -2.0]
-  n_objects: 18
+  n_objects: 9
   n_trajectories_eval: 100
 
 demonstrator:
