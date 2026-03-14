@@ -1,3 +1,4 @@
+import json
 import agents.learner as learner
 import agents.demonstrator as demonstrator
 from environments.object_world_environment import ObjectWorldEnvironment
@@ -19,6 +20,7 @@ def create_objectworld_env(
     random_start: bool = True,
     continuous: bool = False,
     n_objects: int = 2,
+    objects: list[dict] = None,
 ):
 
     config_env = {
@@ -34,6 +36,9 @@ def create_objectworld_env(
         "T": T,
         "n_objects": n_objects,
     }
+
+    if objects is not None:
+        config_env["objects"] = objects
 
     env = ObjectWorldEnvironment(config_env)
 
@@ -53,7 +58,7 @@ def create_config_learner():
 
 def run_experiment(args):
     np.random.seed()
-    n_trajectories, run = args
+    n_trajectories, run, objects_train, objects_eval = args
     show = False
     store = False
     experiment_name = "object-world"
@@ -111,6 +116,7 @@ def run_experiment(args):
         random_start=random_start,
         continuous=continuous,
         n_objects=n_objects,
+        objects=objects_train,
     )
     config_default_learner = create_config_learner()
 
@@ -234,7 +240,7 @@ def run_experiment(args):
         }
     )
 
-    # Evaluate on a fresh environment with newly randomized object placement
+    # Evaluate on a separate environment with different object placement
     env_new = create_objectworld_env(
         gamma=gamma,
         T=T,
@@ -242,6 +248,7 @@ def run_experiment(args):
         random_start=random_start,
         continuous=continuous,
         n_objects=n_objects,
+        objects=objects_eval,
     )
 
     reward_demonstrator_new = env_new.compute_true_reward_for_agent(
@@ -270,11 +277,49 @@ def run_experiment(args):
 
 
 if __name__ == "__main__":
+    import argparse
+    import os
+
+    parser = argparse.ArgumentParser(description="Object World experiment")
+    parser.add_argument(
+        "--objects-train", default=None,
+        help="Path to JSON with fixed training object config",
+    )
+    parser.add_argument(
+        "--objects-eval", default=None,
+        help="Path to JSON with fixed evaluation object config",
+    )
+    cli_args = parser.parse_args()
+
+    # Load or generate fixed object configs
+    os.makedirs("experiments/object_world", exist_ok=True)
+
+    if cli_args.objects_train:
+        with open(cli_args.objects_train, "r") as f:
+            objects_train = json.load(f)
+    else:
+        # Generate and save a training config
+        seed_env = create_objectworld_env()
+        objects_train = seed_env.export_objects_config()
+        with open("experiments/object_world/objects_train.json", "w") as f:
+            json.dump(objects_train, f, indent=2)
+        print("Saved training object config to experiments/object_world/objects_train.json")
+
+    if cli_args.objects_eval:
+        with open(cli_args.objects_eval, "r") as f:
+            objects_eval = json.load(f)
+    else:
+        # Generate and save an eval config (different from training)
+        seed_env = create_objectworld_env()
+        objects_eval = seed_env.export_objects_config()
+        with open("experiments/object_world/objects_eval.json", "w") as f:
+            json.dump(objects_eval, f, indent=2)
+        print("Saved eval object config to experiments/object_world/objects_eval.json")
 
     tasks = []
     for n_trajectories in [1, 10, 50, 100, 200, 500, 1000, 2500, 5000]:
         for run in range(10):
-            tasks.append((n_trajectories, run))
+            tasks.append((n_trajectories, run, objects_train, objects_eval))
 
     with Pool(processes=5) as pool:
         results = pool.map(run_experiment, tasks)

@@ -66,18 +66,25 @@ class ObjectWorldEnvironment(GridEnvironment):
             2 * self.n_colors * self.grid_size if self.discrete else 2 * self.n_colors
         )
 
+        # Load fixed object config or generate randomly
+        objects_config = env_args.get("objects", None)
         self.objects = {}
-        for _ in range(self.n_objects):
-            obj = WorldObject(
-                np.random.randint(self.n_colors), np.random.randint(self.n_colors)
-            )
-            while True:
-                x = np.random.randint(self.grid_size)
-                y = np.random.randint(self.grid_size)
+        if objects_config is not None:
+            for entry in objects_config:
+                x, y = entry["x"], entry["y"]
+                self.objects[x, y] = WorldObject(entry["inner_color"], entry["outer_color"])
+        else:
+            for _ in range(self.n_objects):
+                obj = WorldObject(
+                    np.random.randint(self.n_colors), np.random.randint(self.n_colors)
+                )
+                while True:
+                    x = np.random.randint(self.grid_size)
+                    y = np.random.randint(self.grid_size)
 
-                if (x, y) not in self.objects:
-                    break
-            self.objects[x, y] = obj
+                    if (x, y) not in self.objects:
+                        break
+                self.objects[x, y] = obj
 
         print(self.objects)
 
@@ -91,6 +98,18 @@ class ObjectWorldEnvironment(GridEnvironment):
         )
 
         self.time_step = 0
+
+    def export_objects_config(self) -> list[dict]:
+        """Export object placements as a JSON-serializable list."""
+        return [
+            {
+                "x": int(x),
+                "y": int(y),
+                "inner_color": int(obj.inner_color),
+                "outer_color": int(obj.outer_color),
+            }
+            for (x, y), obj in self.objects.items()
+        ]
 
     def _get_initial_distribution(self):
 
