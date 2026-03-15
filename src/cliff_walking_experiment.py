@@ -19,8 +19,8 @@ import pandas as pd
 from multiprocessing import Pool
 import wandb
 from pathlib import Path
-from torch.optim import RMSprop, Adamax
-from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
+from torch.optim import RMSprop, Adamax, Adam, SGD
+from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau, LambdaLR
 
 
 def create_cliff_walking_env(success_rate: float, one_hot_features: bool = True):
@@ -58,10 +58,10 @@ def create_cliff_walking_env(success_rate: float, one_hot_features: bool = True)
 
 def create_config_learner(one_hot_features:bool):
     return {
-        "tol_exp": 0.5 if one_hot_features else 0.1,
-        "tol_var": 5.0 if one_hot_features else 1.0,
+        "tol_exp": 0.5 if one_hot_features else 0.75,
+        "tol_var": 5.0 if one_hot_features else 2.5,
         "miniter": 1,
-        "maxiter": 10000,
+        "maxiter": 25000,
     }
 
 
@@ -82,26 +82,24 @@ def run_experiment(args):
         reinit=True#"finish_previous",
     )
 
+    lr_lambda_v = lambda step, dr=0.95: max(
+            dr ** np.log(step + 1), 0.001
+        )
+
     learning_rate_e ={
         "scheduler": ReduceLROnPlateau,
         "scheduler_kwargs": {"min_lr": 0.0001, "factor":0.5},
     }
     learning_rate_v = {
-        "scheduler": CyclicLR,
-        "scheduler_kwargs": {
-            "base_lr": 0.025617432353436567,
-            "max_lr": 0.025617432353436567 +0.05,
-            "step_size_up": 100,
-            "mode": "exp_range",
-            "gamma": 0.95,
-        },
+        "scheduler":LambdaLR,
+        "scheduler_kwargs": {"lr_lambda": lr_lambda_v},
     }
-    optimizer_e = RMSprop
-    optimizer_v = Adamax
-    optimizer_e_kwargs = {"lr": 0.025617432353436567, "weight_decay":0}
-    optimizer_v_kwargs = {"lr": 0.07963730913863386, "eps": 1e-7, "weight_decay": 0.005}
+    optimizer_e = SGD
+    optimizer_v = Adam
+    optimizer_e_kwargs = {"lr": 0.1082132355829346, "weight_decay":0.001}
+    optimizer_v_kwargs = {"lr": 0.01334957537525307, "eps": 1e-7, "weight_decay": 0.001}
     alternate_every = None
-    var_factor = 3
+    var_factor = 7
 
     env = create_cliff_walking_env(success_rate, one_hot_features)
     config_default_learner = create_config_learner(one_hot_features)
@@ -242,11 +240,11 @@ if __name__ == "__main__":
 
     tasks = []
     for sr in success_rates:
-        for one_hot in [True, False]:
+        for one_hot in [False]:
             for i in range(runs):
                 tasks.append((sr, T * int(1 / sr), i, one_hot))
 
-    with Pool(processes=7) as pool:
+    with Pool(processes=10) as pool:
         results = pool.map(run_experiment, tasks)
 
     results_df = pd.DataFrame(
