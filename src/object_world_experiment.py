@@ -1,7 +1,7 @@
 import json
 import agents.learner as learner
-import agents.demonstrator as demonstrator
 from environments.object_world_environment import ObjectWorldEnvironment
+from tuning.demonstrator_cache import load_or_train_demonstrator
 import solvers.MDP_solver_exact as MDPSolver
 import numpy as np
 import pandas as pd
@@ -136,11 +136,15 @@ def run_experiment(args):
             format="jpg",
         )
 
-    # create demonstrator with shorter trajectory length
-    demo = demonstrator.ObjectWorldDemonstrator(
+    # load cached demonstrator or train a new one
+    demo = load_or_train_demonstrator(
         env,
-        demonstrator_name="ObjectWorldDemonstrator",
-        T=demo_T,
+        objects_config=objects_train,
+        demo_T=demo_T,
+        n_trajectories=None,
+        theta=[1.0, 1.0, -2.0],
+        random_start=random_start,
+        continuous=continuous,
     )
 
     reward_demonstrator = env.compute_true_reward_for_agent(demo, n_trajectories, T)

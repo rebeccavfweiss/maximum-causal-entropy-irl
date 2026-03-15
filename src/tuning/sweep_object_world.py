@@ -19,7 +19,6 @@ Usage:
 import argparse
 import json
 import wandb
-import agents.demonstrator as demonstrator
 from environments.object_world_environment import ObjectWorldEnvironment
 from tuning.common import (
     load_config,
@@ -29,6 +28,7 @@ from tuning.common import (
     train_and_evaluate_tabular,
     train_and_evaluate_tabular_mmd,
 )
+from tuning.demonstrator_cache import load_or_train_demonstrator
 
 _yaml_config = None
 _agent_type = None
@@ -61,11 +61,14 @@ def train():
         env = create_environment(env_cfg)
 
         demo_T = demo_cfg.get("T", env_cfg["T"])
-        demo = demonstrator.ObjectWorldDemonstrator(
+        demo = load_or_train_demonstrator(
             env,
-            demonstrator_name="ObjectWorldDemonstrator",
-            T=demo_T,
+            objects_config=_objects_config,
+            demo_T=demo_T,
             n_trajectories=demo_cfg.get("n_trajectories"),
+            theta=env_cfg.get("theta", [1.0, 1.0, -2.0]),
+            random_start=env_cfg.get("random_start", False),
+            continuous=env_cfg.get("continuous", False),
         )
 
         learner_config = build_learner_config(sweep_cfg, _agent_type)
