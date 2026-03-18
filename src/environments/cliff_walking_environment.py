@@ -246,7 +246,7 @@ class CliffWalkingEnvironment(GridEnvironment):
             )
             plt.savefig(
                 os.path.join(
-                    "plots", "cliff_walking_environment", f"{strname}_reward.jpg"
+                    "plots", "cliff_walking_environment", f"{strname}_reward_sr{self.success_rate}.jpg"
                 ),
                 format="jpg",
             )
@@ -305,7 +305,7 @@ class CliffWalkingEnvironment(GridEnvironment):
             if store:
                 plt.savefig(
                     os.path.join(
-                        "plots", "cliff_walking_environment", f"{strname}_policy.jpg"
+                        "plots", "cliff_walking_environment", f"{strname}_sr{self.success_rate}_policy.jpg"
                     ),
                     format="jpg",
                 )
