@@ -235,7 +235,7 @@ class TabularMMDLearner(TabularLearner):
 
             # Early stopping: check if MMD^2 is stagnating
             if t >= self.miniter and t >= early_stop_window:
-                if MMDLearner._check_stagnation(mmd_history, early_stop_window):
+                if self._check_stagnation(mmd_history, early_stop_window):
                     wandb.log({f"early_stopped_{self.agent_name}": True})
                     break
 

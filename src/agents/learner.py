@@ -169,8 +169,27 @@ class Learner(Agent):
             self.env, self.policy, self.n_trajectories
         )
 
+    @staticmethod
+    def _check_stagnation(history: list[float], window: int = 200) -> bool:
+        """
+        Check if the loss has stagnated over the last `window` iterations.
+
+        Uses linear regression slope on the log-loss. Returns True if the
+        trend is non-decreasing (i.e., loss is not going down).
+        """
+        if len(history) < window:
+            return False
+        recent = np.array(history[-window:])
+        log_vals = np.log(np.maximum(recent, 1e-12))
+        x = np.arange(window, dtype=np.float64)
+        x_mean = x.mean()
+        slope = np.sum((x - x_mean) * (log_vals - log_vals.mean())) / np.sum(
+            (x - x_mean) ** 2
+        )
+        return slope >= 0.0
+
     def batch_MCE(
-        self, alternate_every: int = None, var_factor: int = 2
+        self, alternate_every: int = None, var_factor: int = 2, early_stop_window: int = 200
     ) -> tuple[int, list[float]]:
         """
         implementation of Algorithm 1
@@ -189,6 +208,8 @@ class Learner(Agent):
             self.solver, MDPSolverApproximationVariance
         )
         runtime = []
+        loss_history_e = []
+        loss_history_v = []
 
         min_lr = 0.001
         gamma = 0.99
@@ -346,6 +367,11 @@ class Learner(Agent):
                     )
                 self.rewards.append(current_rewards)
 
+            # Track loss history for early stopping
+            loss_history_e.append(theta_e_diff)
+            if calc_theta_v:
+                loss_history_v.append(theta_v_diff)
+
             if theta_e_diff < self.tol_exp and (
                 not calc_theta_v or theta_v_diff < self.tol_var
             ):
@@ -354,6 +380,16 @@ class Learner(Agent):
 
             if t >= self.maxiter:
                 break
+
+            # Early stopping: check if loss is stagnating
+            if early_stop_window and t >= self.miniter and t >= early_stop_window:
+                e_stagnated = self._check_stagnation(loss_history_e, early_stop_window)
+                v_stagnated = not calc_theta_v or self._check_stagnation(
+                    loss_history_v, early_stop_window
+                )
+                if e_stagnated and v_stagnated:
+                    wandb.log({f"early_stopped_{self.agent_name}": True})
+                    break
 
             t += 1
 

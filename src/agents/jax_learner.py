@@ -98,28 +98,6 @@ class JaxApproximateLearner(ApproximateLearner):
         self._lr_decay_rate_e = lr_decay_rate_e
         self._lr_decay_rate_v = lr_decay_rate_v
 
-    @staticmethod
-    def _check_stagnation(history: list[float], window: int = 200) -> bool:
-        """
-        Check if the loss has stagnated over the last `window` iterations.
-
-        Uses linear regression slope on the log-loss. Returns True if the
-        trend is non-decreasing (i.e., loss is not going down).
-        """
-        if len(history) < window:
-            return False
-        recent = np.array(history[-window:])
-        # Use log to handle scale differences; clamp to avoid log(0)
-        log_vals = np.log(np.maximum(recent, 1e-12))
-        # Simple linear regression: slope of log_vals vs index
-        x = np.arange(window, dtype=np.float64)
-        x_mean = x.mean()
-        slope = np.sum((x - x_mean) * (log_vals - log_vals.mean())) / np.sum(
-            (x - x_mean) ** 2
-        )
-        # Stagnated if slope >= 0 (not decreasing)
-        return slope >= 0.0
-
     def batch_MCE(
         self,
         alternate_every: int = None,
