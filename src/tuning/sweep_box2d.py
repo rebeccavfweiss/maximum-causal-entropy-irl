@@ -108,6 +108,7 @@ def train():
             n_trajectories_eval=env_cfg.get("n_trajectories_eval", 500),
             alternate_every=getattr(sweep_cfg, "alternate_every", None),
             var_factor=getattr(sweep_cfg, "var_factor", 2),
+            early_stop_window=getattr(sweep_cfg, "early_stop_window", 200),
             show=False,
             store=True,
         )

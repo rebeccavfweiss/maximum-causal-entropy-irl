@@ -82,6 +82,7 @@ def train():
                 n_trajectories_eval=env_cfg.get("n_trajectories_eval", 100),
                 kernel_bandwidth=getattr(sweep_cfg, "kernel_bandwidth", None),
                 tol_mmd=getattr(sweep_cfg, "tol_mmd", 0.01),
+                early_stop_window=getattr(sweep_cfg, "early_stop_window", 200),
                 show=False,
                 store=False,
             )
@@ -97,6 +98,7 @@ def train():
                 n_trajectories_eval=env_cfg.get("n_trajectories_eval", 100),
                 alternate_every=getattr(sweep_cfg, "alternate_every", None),
                 var_factor=getattr(sweep_cfg, "var_factor", 2),
+                early_stop_window=getattr(sweep_cfg, "early_stop_window", 200),
                 show=False,
                 store=False,
             )

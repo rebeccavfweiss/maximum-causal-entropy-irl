@@ -275,6 +275,7 @@ def train_and_evaluate_tabular(
     n_trajectories_eval: int,
     alternate_every=None,
     var_factor: int = 2,
+    early_stop_window: int = 200,
     show: bool = False,
     store: bool = False,
 ) -> None:
@@ -298,7 +299,7 @@ def train_and_evaluate_tabular(
             optimizer_e=optimizer_config["optimizer_e"],
             optimizer_e_kwargs=optimizer_config["optimizer_e_kwargs"],
         )
-        iters, times = agent.batch_MCE()
+        iters, times = agent.batch_MCE(early_stop_window=early_stop_window)
         agent.compute_and_draw(show, store, 4)
         reward = env.compute_true_reward_for_agent(
             agent, n_trajectories_eval, T
@@ -327,7 +328,8 @@ def train_and_evaluate_tabular(
             optimizer_v_kwargs=optimizer_config["optimizer_v_kwargs"],
         )
         iters, times = agent.batch_MCE(
-            alternate_every=alternate_every, var_factor=var_factor
+            alternate_every=alternate_every, var_factor=var_factor,
+            early_stop_window=early_stop_window,
         )
         agent.compute_and_draw(show, store, 7)
         reward = env.compute_true_reward_for_agent(
@@ -359,6 +361,7 @@ def train_and_evaluate_approximate(
     n_trajectories_eval: int,
     alternate_every=None,
     var_factor: int = 2,
+    early_stop_window: int = 200,
     heuristic_theta_e=None,
     heuristic_theta_v=None,
     show: bool = False,
@@ -413,7 +416,7 @@ def train_and_evaluate_approximate(
             optimizer_e_kwargs=optimizer_config["optimizer_e_kwargs"],
             heuristic_theta_e=heuristic_theta_e,
         )
-        iters, times = agent.batch_MCE()
+        iters, times = agent.batch_MCE(early_stop_window=early_stop_window)
         agent.compute_and_draw(show, store, 2)
         reward = env.compute_true_reward_for_agent(
             agent, n_trajectories_eval, T
@@ -462,7 +465,8 @@ def train_and_evaluate_approximate(
             heuristic_theta_v=heuristic_theta_v,
         )
         iters, times = agent.batch_MCE(
-            alternate_every=alternate_every, var_factor=var_factor
+            alternate_every=alternate_every, var_factor=var_factor,
+            early_stop_window=early_stop_window,
         )
         agent.compute_and_draw(show, store, 4)
         reward = env.compute_true_reward_for_agent(
@@ -512,6 +516,7 @@ def train_and_evaluate_jax(
     lr_decay_rate_v: float = 0.9,
     alternate_every=None,
     var_factor: int = 2,
+    early_stop_window: int = 200,
     show: bool = False,
     store: bool = True,
 ) -> None:
@@ -554,7 +559,7 @@ def train_and_evaluate_jax(
             lr_e=lr_e,
             lr_decay_rate_e=lr_decay_rate_e,
         )
-        iters, times = agent.batch_MCE()
+        iters, times = agent.batch_MCE(early_stop_window=early_stop_window)
         reward = env.compute_true_reward_for_agent(
             agent, n_trajectories_eval, T
         )
@@ -594,7 +599,8 @@ def train_and_evaluate_jax(
             lr_decay_rate_v=lr_decay_rate_v,
         )
         iters, times = agent.batch_MCE(
-            alternate_every=alternate_every, var_factor=var_factor
+            alternate_every=alternate_every, var_factor=var_factor,
+            early_stop_window=early_stop_window,
         )
         reward = env.compute_true_reward_for_agent(
             agent, n_trajectories_eval, T
@@ -604,7 +610,7 @@ def train_and_evaluate_jax(
         wandb.log(
             {
                 "reward_variance": reward,
-                "reward_diff_variance": reward - 
+                "reward_diff_variance": reward -
                     reward_demonstrator,
                 "iterations_variance": iters,
                 "time_total_variance": sum(times),
@@ -634,6 +640,7 @@ def train_and_evaluate_mmd(
     n_trajectories_eval: int,
     kernel_bandwidth: float = None,
     tol_mmd: float = 0.01,
+    early_stop_window: int = 200,
     show: bool = False,
     store: bool = True,
 ) -> None:
@@ -705,7 +712,7 @@ def train_and_evaluate_mmd(
         kernel_bandwidth=kernel_bandwidth,
         tol_mmd=tol_mmd,
     )
-    iters, times = agent.batch_MCE()
+    iters, times = agent.batch_MCE(early_stop_window=early_stop_window)
     reward = env.compute_true_reward_for_agent(
         agent, n_trajectories_eval, T
     )
@@ -737,6 +744,7 @@ def train_and_evaluate_tabular_mmd(
     n_trajectories_eval: int,
     kernel_bandwidth: float = None,
     tol_mmd: float = 0.01,
+    early_stop_window: int = 200,
     show: bool = False,
     store: bool = False,
 ) -> None:
@@ -785,7 +793,7 @@ def train_and_evaluate_tabular_mmd(
         kernel_bandwidth=kernel_bandwidth,
         tol_mmd=tol_mmd,
     )
-    iters, times = agent.batch_MCE()
+    iters, times = agent.batch_MCE(early_stop_window=early_stop_window)
     agent.compute_and_draw(show, store, 10)
     reward = env.compute_true_reward_for_agent(
         agent, n_trajectories_eval, T

@@ -24,6 +24,8 @@ sweep:
       value: 5000
     miniter:
       value: 1
+    early_stop_window:
+      value: 200
     # Optimizer config (shared - theta_e)
     optimizer_type_e:
       values: ["Adam", "RMSprop", "Adamax", "SGD"]

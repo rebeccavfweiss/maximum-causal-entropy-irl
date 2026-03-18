@@ -161,6 +161,7 @@ def train():
             n_trajectories_eval=env_cfg.get("n_trajectories_eval", 150),
             alternate_every=getattr(sweep_cfg, "alternate_every", None),
             var_factor=getattr(sweep_cfg, "var_factor", 2),
+            early_stop_window=getattr(sweep_cfg, "early_stop_window", 200),
             heuristic_theta_e=h_theta_e,
             heuristic_theta_v=h_theta_v,
             show=False,
