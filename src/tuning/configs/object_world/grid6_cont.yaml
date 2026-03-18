@@ -1,21 +1,21 @@
 environment:
   type: object_world
   gamma: 0.95
-  grid_size: 16
+  grid_size: 8
   T: 50
   random_start: true
   continuous: true
   theta: [1.0, 1.0, -2.0]
-  n_objects: 9
+  n_objects: 5
   n_trajectories_eval: 100
 
 demonstrator:
   n_trajectories: 500
-  T: 8
+  T: 50
 
 wandb:
   project: "mceirl-object-world-cont-tuning"
-  sweep_count: 50
+  sweep_count: 30
 
 sweep:
   method: bayes
@@ -31,7 +31,7 @@ sweep:
     tol_exp:
       value: 0.05
     maxiter:
-      value: 2500
+      value: 10000
     miniter:
       value: 1
     # Optimizer config (shared - theta_e)
@@ -72,4 +72,4 @@ sweep:
     tol_mmd:
       values: [0.001, 0.005, 0.01, 0.05]
     n_trajectories:
-      value: 100
+      value: 25

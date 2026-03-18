@@ -48,9 +48,9 @@ def create_objectworld_env(
 def create_config_learner():
     config_default_learner = {
         "tol_exp": 0.05,
-        "tol_var": 7.5,
+        "tol_var": 0.75,
         "miniter": 1,
-        "maxiter": 5_000,
+        "maxiter": 15_000,
     }
 
     return config_default_learner
@@ -63,12 +63,12 @@ def run_experiment(args):
     store = False
     experiment_name = "object-world"
     T = 50
-    demo_T = 8
-    grid_size = 32
+    demo_T = 16
+    grid_size = 8
     gamma = 1.0
     random_start = True
-    continuous = False
-    n_objects = 18
+    continuous = True
+    n_objects = 5
     config_default_learner = create_config_learner()
     learning_rate = {
         "scheduler": ReduceLROnPlateau,

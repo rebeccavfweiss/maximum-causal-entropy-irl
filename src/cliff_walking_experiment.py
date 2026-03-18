@@ -49,27 +49,34 @@ def create_cliff_walking_env(success_rate: float, one_hot_features: bool = True)
         "theta": theta,
         "gamma": 1.0,
         "success_rate": success_rate,
-        "T": 100,
+        "T": 50,
         "one_hot_features": one_hot_features,
     }
 
     return CliffWalkingEnvironment(config_env)
 
 
-def create_config_learner(one_hot_features:bool):
+def create_config_learner_var(one_hot_features:bool):
     return {
-        "tol_exp": 0.5 if one_hot_features else 0.75,
-        "tol_var": 5.0 if one_hot_features else 2.5,
+        "tol_exp": 0.5 if one_hot_features else 1.0,
+        "tol_var": 5.0 if one_hot_features else 1.5,
+        "miniter": 1,
+        "maxiter": 25000,
+    }
+
+def create_config_learner_exp(one_hot_features:bool):
+    return {
+        "tol_exp": 0.5 if one_hot_features else 0.5,
         "miniter": 1,
         "maxiter": 25000,
     }
 
 
 def run_experiment(args):
-    success_rate, T, i, one_hot_features = args
+    success_rate, T, n_trj, i, one_hot_features = args
 
     feat_tag = "onehot" if one_hot_features else "scalar"
-    run_name = f"cliff_sr{success_rate}_T{T}_{feat_tag}_run{i}"
+    run_name = f"cliff_sr{success_rate}_T{T}_{feat_tag}_tr{n_trj}_run{i}"
     wandb.init(
         project="mceirl-cliffwalking",
         name=run_name,
@@ -78,6 +85,7 @@ def run_experiment(args):
             "horizon": T,
             "run": i,
             "one_hot_features": one_hot_features,
+            "demo_trajectories": n_trj
         },
         reinit=True#"finish_previous",
     )
@@ -102,14 +110,15 @@ def run_experiment(args):
     var_factor = 7
 
     env = create_cliff_walking_env(success_rate, one_hot_features)
-    config_default_learner = create_config_learner(one_hot_features)
+    # config_default_learner = create_config_learner(one_hot_features)
 
     demo = demonstrator.CliffWalkingDemonstrator(
         env,
-        demonstrator_name="CliffWalkingDemonstrator",
+        demonstrator_name=f"CliffWalkingDemonstrator",
         T=T,
+        n_trajectories=n_trj,
     )
-    path_to_file = demo.render(False, True, 0)
+    path_to_file = demo.render(False, False, 0)
     if path_to_file is not None:
         wandb.log(
             {
@@ -118,8 +127,8 @@ def run_experiment(args):
                 )
             }
         )
-        if os.path.exists(path_to_file):
-            os.remove(path_to_file)
+        # if os.path.exists(path_to_file):
+        #     os.remove(path_to_file)
 
 
     reward_demonstrator = env.compute_true_reward_for_agent(demo, None, T)
@@ -137,13 +146,13 @@ def run_experiment(args):
     agent_expectation = learner.TabularLearner(
         env,
         demo.mu_demonstrator,
-        config_default_learner,
-        agent_name="AgentExpectation",
+        create_config_learner_exp(one_hot_features),
+        agent_name=f"AgentExpectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
     agent_expectation.compute_and_draw(False, False, 2)
-    path_to_file = agent_expectation.render(False, True, 6)
+    path_to_file = agent_expectation.render(False, False, 6)
     if path_to_file is not None:
         wandb.log(
             {
@@ -178,7 +187,7 @@ def run_experiment(args):
     agent_variance = learner.TabularLearner(
         env,
         demo.mu_demonstrator,
-        config_default_learner,
+        create_config_learner_var(one_hot_features),
         agent_name=f"AgentVariance",
         solver=MDPSolver.MDPSolverExactVariance(T),
         learning_rate_e=learning_rate_e,
@@ -192,7 +201,7 @@ def run_experiment(args):
         alternate_every=alternate_every, var_factor=var_factor
     )
     agent_variance.compute_and_draw(False, False, 4)
-    path_to_file = agent_variance.render(False, True, 8)
+    path_to_file = agent_variance.render(False, False, 8)
     if path_to_file is not None:
         wandb.log(
             {"eval/video_variance": wandb.Video(str(path_to_file), format="mp4")}
@@ -234,17 +243,19 @@ def run_experiment(args):
 
 if __name__ == "__main__":
 
-    success_rates = [1.0, 0.95, 0.9, 0.85, 0.8, 0.7, 0.6, 0.5, 1.0 / 3.0]
+    success_rates = [1.0, 0.9, 0.8, 0.7, 0.6]
+    demonstrator_trajectories = [10, 100, 1000, 5000, 10_000, 50_000, 100_000]
     T = 50
-    runs = 20
+    runs = 5
 
     tasks = []
     for sr in success_rates:
-        for one_hot in [False]:
-            for i in range(runs):
-                tasks.append((sr, T * int(1 / sr), i, one_hot))
+        for n_trj in demonstrator_trajectories:
+            for one_hot in [False]:
+                for i in range(runs):
+                    tasks.append((sr, T * int(1 / sr),n_trj, i, one_hot))
 
-    with Pool(processes=10) as pool:
+    with Pool(processes=7) as pool:
         results = pool.map(run_experiment, tasks)
 
     results_df = pd.DataFrame(
@@ -269,5 +280,5 @@ if __name__ == "__main__":
     )
 
     os.makedirs(Path("experiments") / "cliff_walking", exist_ok=True)
-    results_df.to_csv(Path("experiments") / "cliff_walking" / "results_parallel.csv")
+    results_df.to_csv(Path("experiments") / "cliff_walking" / "results_visualization_parallel.csv")
     print(results_df.groupby(["success_rate", "one_hot_features"]).mean())

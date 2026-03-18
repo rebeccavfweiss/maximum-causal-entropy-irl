@@ -188,6 +188,12 @@ def build_learner_config(sweep_config, agent_type: str) -> dict:
             "maxiter": sweep_config.maxiter,
             "miniter": getattr(sweep_config, "miniter", 1),
         }
+    elif agent_type == "expectation":
+        config = {
+            "tol_exp": getattr(sweep_config, "tol_exp_only", sweep_config.tol_exp),
+            "maxiter": sweep_config.maxiter,
+            "miniter": getattr(sweep_config, "miniter", 1),
+        }
     else:
         config = {
             "tol_exp": sweep_config.tol_exp,
