@@ -659,12 +659,13 @@ def train_and_evaluate_mmd(
         demo_env, demo, n_trajectories_eval, T
     )
 
-    # Collect expert trajectory features for MMD
+    # Collect expert trajectory features using the demonstrator's horizon
+    demo_T = demo.T
     expert_solver = JaxSolverExpectation(
         experiment_name=experiment_name + "_expert_features",
         training_algorithm=training_algorithm,
         training_config=training_config,
-        T=T,
+        T=demo_T,
         compute_variance=False,
         full_training_timesteps=full_training_timesteps,
         finetune_timesteps=finetune_timesteps,
@@ -672,7 +673,7 @@ def train_and_evaluate_mmd(
     n_traj = learner_config.get("n_trajectories", 100)
     expert_features = []
     for _ in range(n_traj):
-        trajectory = expert_solver.generate_episode(env, demo.policy, T)
+        trajectory = expert_solver.generate_episode(env, demo.policy, demo_T)
         if len(trajectory) == 0:
             expert_features.append(
                 np.zeros(env.n_features, dtype=np.float32)
@@ -760,13 +761,14 @@ def train_and_evaluate_tabular_mmd(
         env, demo, n_trajectories_eval, T
     )
 
-    # Collect expert trajectory features
-    expert_solver = MDPSolverExact.MDPSolverExactExpectation(T)
+    # Collect expert trajectory features using the demonstrator's horizon
+    demo_T = demo.T
+    expert_solver = MDPSolverExact.MDPSolverExactExpectation(demo_T)
     n_traj = learner_config.get("n_trajectories", 100)
     feature_matrix = env.get_state_feature_matrix()
     expert_features = []
     for _ in range(n_traj):
-        trajectory = expert_solver.generate_episode(env, demo.policy, T)
+        trajectory = expert_solver.generate_episode(env, demo.policy, demo_T)
         if len(trajectory) == 0:
             expert_features.append(
                 np.zeros(env.n_features, dtype=np.float32)
