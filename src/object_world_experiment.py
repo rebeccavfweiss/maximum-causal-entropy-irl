@@ -10,7 +10,7 @@ import wandb
 import matplotlib.pylab as plt
 from pathlib import Path
 from torch.optim.lr_scheduler import ReduceLROnPlateau, LambdaLR, CyclicLR
-from torch.optim import Adamax, Adam
+from torch.optim import Adamax, Adam, SGD
 
 
 def create_objectworld_env(
@@ -47,10 +47,10 @@ def create_objectworld_env(
 
 def create_config_learner():
     config_default_learner = {
-        "tol_exp": 0.005,
-        "tol_var": 0.1,
+        "tol_exp": 0.05,
+        "tol_var": 0.75,
         "miniter": 1,
-        "maxiter": 5_000,
+        "maxiter": 15_000,
     }
 
     return config_default_learner
@@ -63,33 +63,31 @@ def run_experiment(args):
     store = False
     experiment_name = "object-world"
     T = 50
-    demo_T = 8
-    grid_size = 32
+    demo_T = 16
+    grid_size = 8
     gamma = 1.0
     random_start = True
-    continuous = False
-    n_objects = 18
+    continuous = True
+    n_objects = 5
     config_default_learner = create_config_learner()
     learning_rate = {
         "scheduler": ReduceLROnPlateau,
         "scheduler_kwargs": {"min_lr": 0.0001, "factor": 0.5},
     }
-    learning_rate_e = {
-        "scheduler": LambdaLR,
-        "scheduler_kwargs": {
-            "lr_lambda": lambda step: max(0.95 ** np.log(step + 1), 0.001)
-        },
+    learning_rate_e ={
+        "scheduler": ReduceLROnPlateau,
+        "scheduler_kwargs": {"min_lr": 0.0001, "factor":0.5},
     }
     learning_rate_v = {
         "scheduler": ReduceLROnPlateau,
         "scheduler_kwargs": {"min_lr": 0.0001, "factor": 0.5},
     }
     optimizer = Adam
-    optimizer_e = Adam
+    optimizer_e = SGD
     optimizer_v = Adamax
-    optimizer_kwargs = {"lr": 0.025198630693598355, "weight_decay": 0.001}
-    optimizer_e_kwargs = {"lr": 0.013481979369633936, "weight_decay": 0.001}
-    optimizer_v_kwargs = {"lr": 0.06503275998396742, "eps": 1e-7, "weight_decay": 0.005}
+    optimizer_kwargs = {"lr": 0.025198630693598355, "weight_decay":0.001}
+    optimizer_e_kwargs = {"lr": 0.017406304685365078, "weight_decay":0.001}
+    optimizer_v_kwargs = {"lr": 0.05738768503625415, "eps": 1e-7, "weight_decay": 0.005}
     alternate_every = None
     var_factor = 3
 
@@ -166,8 +164,8 @@ def run_experiment(args):
         agent_name=f"AgentExpectation",
         solver=MDPSolver.MDPSolverExactExpectation(T),
         learning_rate_e=learning_rate,
-        optimizer_e=optimizer_e,
-        optimizer_e_kwargs=optimizer_e_kwargs,
+        optimizer_e=optimizer,
+        optimizer_e_kwargs=optimizer_kwargs,
     )
     iter_expectation, time_expectation = agent_expectation.batch_MCE()
     agent_expectation.compute_and_draw(show, store, 4)
@@ -208,9 +206,9 @@ def run_experiment(args):
         solver=MDPSolver.MDPSolverExactVariance(T),
         learning_rate_e=learning_rate_e,
         learning_rate_v=learning_rate_v,
-        optimizer_e=optimizer_v,
+        optimizer_e=optimizer_e,
         optimizer_v=optimizer_v,
-        optimizer_e_kwargs=optimizer_v_kwargs,
+        optimizer_e_kwargs=optimizer_e_kwargs,
         optimizer_v_kwargs=optimizer_v_kwargs,
     )
     iter_variance, time_variance = agent_variance.batch_MCE(

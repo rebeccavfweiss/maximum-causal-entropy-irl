@@ -4,7 +4,7 @@ environment:
   grid_size: 8
   T: 50
   random_start: true
-  continuous: false
+  continuous: true
   theta: [1.0, 1.0, -2.0]
   n_objects: 5
   n_trajectories_eval: 100
@@ -14,7 +14,7 @@ demonstrator:
   T: 50
 
 wandb:
-  project: "mceirl-object-world-tuning"
+  project: "mceirl-object-world-cont-tuning"
   sweep_count: 30
 
 sweep:
@@ -29,15 +29,11 @@ sweep:
       values: [20, 50, 100]
     # Learner convergence (shared)
     tol_exp:
-      value: 1.0
-    tol_exp_only:
-      value: 0.1
+      value: 0.05
     maxiter:
-      value: 2500
+      value: 10000
     miniter:
       value: 1
-    early_stop_window:
-      value: 200
     # Optimizer config (shared - theta_e)
     optimizer_type_e:
       values: ["Adam", "RMSprop", "Adamax", "SGD"]
@@ -53,7 +49,7 @@ sweep:
       values: ["Lambda", "Cyclic", "Reduce"]
     # Variance-only params (removed for expectation sweeps)
     tol_var:
-      value: 10.0
+      value: 0.5
     optimizer_type_v:
       values: ["Adam", "RMSprop", "Adamax", "SGD"]
     lr_v:
@@ -76,4 +72,4 @@ sweep:
     tol_mmd:
       values: [0.001, 0.005, 0.01, 0.05]
     n_trajectories:
-      value: 50
+      value: 25

@@ -55,7 +55,7 @@ class ObjectWorldEnvironment(GridEnvironment):
         self.n_actions = len(self.actions)
         self.n_states = self.grid_size**2
         self.n_objects = env_args.get("n_objects", 15)
-        self.n_colors = env_args.get("n_colors", 3)
+        self.n_colors = env_args.get("n_colors", 2)
         self.random_start = env_args["random_start"]
         self.discrete = not env_args.get("continuous", False)
         self.T = env_args["T"]
@@ -169,7 +169,7 @@ class ObjectWorldEnvironment(GridEnvironment):
         """
         feature_matrix = np.zeros((self.n_states, self.n_features))
         for i in range(self.n_states):
-            feature_matrix[i, :] = self.__get_state_feature_vector_full(i)
+            feature_matrix[i, :] = self.__get_state_feature_vector_full(i, self.discrete)
         return feature_matrix
 
     def __get_state_feature_vector_full(self, state: int, discrete=True) -> np.ndarray:
